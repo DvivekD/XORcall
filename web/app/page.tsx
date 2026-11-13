@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import StringTuneScroll from "@/components/effects/StringTuneScroll";
-import CyberHologramShield3D from "@/components/motion/CyberHologramShield3D";
+import TelemetryHUD from "@/components/ui/TelemetryHUD";
+import DualConductorUnsheathe from "@/components/motion/DualConductorUnsheathe";
+import WordBlurMorph from "@/components/motion/WordBlurMorph";
+import GuardianCompanion from "@/components/ui/GuardianCompanion";
 import CyberWarfareGlobe3D from "@/components/motion/CyberWarfareGlobe3D";
 import AudioFrequencyRibbon3D from "@/components/motion/AudioFrequencyRibbon3D";
 import { 
-  ShieldAlert, ShieldCheck, Radio, Zap, ArrowDown, ChevronRight, 
-  Volume2, Vibrate, Eye, UserCheck, PhoneCall, ExternalLink, Activity, 
-  Cpu, Lock, Sparkles, CheckCircle2, AlertOctagon, Terminal
+  ShieldAlert, ShieldCheck, Zap, Radio, PhoneCall, ChevronRight, 
+  CheckCircle2, AlertOctagon, Vibrate, Volume2, Eye, UserCheck, 
+  ExternalLink, Sparkles, Activity
 } from "lucide-react";
 
 const SCENARIOS = [
@@ -60,18 +62,39 @@ const SCENARIOS = [
 ];
 
 export default function Home() {
+  const [isLightMode, setIsLightMode] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  // Interceptor State
   const [selectedScenario, setSelectedScenario] = useState(SCENARIOS[0]);
   const [isRunning, setIsRunning] = useState(false);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [threatLevel, setThreatLevel] = useState<"SAFE" | "WATCH" | "WARN" | "CRITICAL">("SAFE");
-  const [hapticsOn, setHapticsOn] = useState(false); // Default OFF per user feedback
+  const [hapticsOn, setHapticsOn] = useState(false); // Default OFF
   const [whisperOn, setWhisperOn] = useState(true);
   const [bannerOn, setBannerOn] = useState(true);
   const [familyPingOn, setFamilyPingOn] = useState(true);
   const [safePingSent, setSafePingSent] = useState(false);
   const [dossierDispatched, setDossierDispatched] = useState(false);
 
-  // Simulation execution runner
+  // Light theme boundary detection on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const top = window.scrollY || document.documentElement.scrollTop;
+      const height = document.documentElement.scrollHeight - window.innerHeight;
+      const pct = height > 0 ? top / height : 0;
+      setScrollProgress(pct);
+
+      // Transition to light mode when scrolled past hero and unsheathe (~38% of page)
+      setIsLightMode(pct > 0.35);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const handleStartSimulation = () => {
     setIsRunning(true);
     setCurrentLineIndex(0);
@@ -99,589 +122,503 @@ export default function Home() {
     setDossierDispatched(false);
   };
 
+  // Parallax horizontal drift for watermark based on scroll
+  const watermarkX = (scrollProgress * 200).toFixed(1);
+
   return (
-    <main className="min-h-screen cyber-canvas-bg text-slate-100 flex flex-col relative selection:bg-cyan-500 selection:text-black">
-      {/* StringTune Dynamic Parallax & Magnetic Cursor Engine */}
-      <StringTuneScroll />
+    <div className={`min-h-screen transition-colors duration-700 ${isLightMode ? "bg-[#e2dde3] text-[#14151a]" : "bg-[#0f1014] text-white"}`}>
+      
+      {/* Real-time Telemetry HUD (0-100% Scroll & Sticky FPS/TOP Pill from Video) */}
+      <TelemetryHUD isLightMode={isLightMode} />
 
-      {/* Floating Sleek Navigation */}
-      <header className="fixed top-4 left-0 right-0 z-50 px-4 max-w-6xl mx-auto">
-        <nav className="glass-panel rounded-full px-5 py-2.5 flex items-center justify-between border border-white/10 shadow-2xl">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-cyan-500/30 group-hover:scale-105 transition-transform">
-              <ShieldAlert className="w-4 h-4 text-black" />
-            </div>
-            <span className="font-black text-base tracking-widest text-white">XORcall</span>
-            <span className="text-[9px] bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono font-bold tracking-wider">
-              SHIELD ACTIVE
+      {/* Floating Assistant Companion (AIKA / OJI widget from Video) */}
+      <GuardianCompanion isLightMode={isLightMode} />
+
+      {/* Top Header (Matches Exact Video Header in frame_0000 / frame_0150 / frame_0400) */}
+      <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between">
+        
+        {/* Brand & Red Vermilion Square Badge (Video Accurate) */}
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-[#e11d48] flex items-center justify-center text-white shadow-md">
+            <Zap className="w-4 h-4 fill-white" />
+          </div>
+          <div>
+            <span className={`font-display text-lg font-black tracking-tight ${isLightMode ? "text-[#14151a]" : "text-white"}`}>
+              XORcall<sup className="text-[10px] font-normal">©</sup>
             </span>
-          </Link>
-
-          <div className="hidden md:flex items-center gap-6 text-xs font-mono text-slate-400">
-            <a href="#killchain" className="hover:text-cyan-400 transition-colors">KILL CHAIN</a>
-            <a href="#warfare" className="hover:text-cyan-400 transition-colors">3D RADAR</a>
-            <a href="#interceptor" className="hover:text-cyan-400 transition-colors">INTERCEPTOR</a>
-            <a href="#sensory" className="hover:text-cyan-400 transition-colors">DEFENSE CONTROLS</a>
           </div>
+        </div>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/sandbox"
-              className="text-xs font-mono text-cyan-300 hover:text-white px-3 py-1.5 rounded-full border border-cyan-500/30 bg-cyan-950/40 hover:bg-cyan-900/60 transition-all hidden sm:inline-block"
-            >
-              3D SANDBOX
-            </Link>
-            <a
-              href="tel:1930"
-              string="magnetic"
-              className="bg-red-600 hover:bg-red-500 text-white font-mono font-bold text-xs px-4 py-1.5 rounded-full shadow-lg shadow-red-600/30 transition-all flex items-center gap-1.5 hover:scale-105 cursor-pointer"
-            >
-              <PhoneCall className="w-3.5 h-3.5" />
-              <span>1930 HELPLINE</span>
-            </a>
-          </div>
+        {/* Center Pill Navigation */}
+        <nav className="hidden md:flex items-center gap-2">
+          <a
+            href="#hero"
+            className={`text-xs font-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              isLightMode ? "pill-button-light" : "pill-button"
+            }`}
+          >
+            Overview
+          </a>
+          <a
+            href="#ladder"
+            className={`text-xs font-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              isLightMode ? "pill-button-light" : "pill-button"
+            }`}
+          >
+            Kill Chain
+          </a>
+          <a
+            href="#interceptor"
+            className={`text-xs font-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              isLightMode ? "pill-button-light" : "pill-button"
+            }`}
+          >
+            Interceptor
+          </a>
+          <a
+            href="#warfare"
+            className={`text-xs font-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              isLightMode ? "pill-button-light" : "pill-button"
+            }`}
+          >
+            3D Radar
+          </a>
+          <a
+            href="tel:1930"
+            className="shimmer-pill-red text-xs font-mono font-bold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 cursor-pointer"
+          >
+            <PhoneCall className="w-3.5 h-3.5" />
+            <span>1930 Helpline</span>
+          </a>
         </nav>
+
+        {/* Right Corner Spacer for the % Telemetry */}
+        <div className="w-12 h-6" />
       </header>
 
       {/* =========================================================================
-          HERO SECTION: Sleek, Minimalist, Kinetic Landing Page with StringTune Parallax
+          ACT 1: THE DARK OBSIDIAN REALM (#0f1014)
           ========================================================================= */}
-      <section className="min-h-screen flex flex-col justify-center items-center px-4 pt-28 pb-16 relative overflow-hidden">
+      <section id="hero" className="min-h-screen pt-28 pb-16 px-6 relative flex flex-col justify-between overflow-hidden">
         
-        {/* Parallax Background Aura */}
+        {/* Giant Parallax Watermark Text (Video Accurate frame_0000 & frame_0150) */}
         <div 
-          string="parallax" 
-          string-factor="0.4"
-          className="absolute w-[600px] h-[600px] rounded-full bg-cyan-500/10 blur-[140px] pointer-events-none top-1/4 -z-10" 
-        />
-        <div 
-          string="parallax" 
-          string-factor="-0.3"
-          className="absolute w-[500px] h-[500px] rounded-full bg-emerald-500/10 blur-[130px] pointer-events-none bottom-1/4 -z-10" 
-        />
-
-        {/* Minimalist Hero Badge */}
-        <div 
-          string="parallax"
-          string-factor="0.1"
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/80 border border-cyan-500/30 text-cyan-400 text-xs font-mono mb-6 backdrop-blur-md shadow-sm"
+          className="absolute -top-6 left-0 right-0 overflow-hidden pointer-events-none select-none z-0"
+          style={{ transform: `translate3d(-${watermarkX}px, 0, 0)` }}
         >
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-          <span>ZERO-TOUCH EXTORTION INTERCEPTOR</span>
-        </div>
-
-        {/* Huge Sleek Kinetic Title */}
-        <h1 
-          string="parallax"
-          string-factor="0.2"
-          className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tight text-center text-transparent bg-clip-text bg-gradient-to-b from-white via-slate-200 to-slate-500 max-w-5xl leading-[1.05]"
-        >
-          Silence the Extortion. <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">
-            Autonomous Cyber Shield.
+          <span className="ghost-watermark-dark text-[22vw] leading-none block">
+            XORcall
           </span>
-        </h1>
-
-        {/* Minimal Razor-Sharp Subtitle */}
-        <p 
-          string="parallax"
-          string-factor="0.25"
-          className="mt-6 text-base sm:text-xl text-slate-400 text-center max-w-2xl font-light leading-relaxed"
-        >
-          Real-time cognitive defense against <strong className="text-slate-200">Digital Arrest</strong> scams and <strong className="text-slate-200">AI Voice Clones</strong>. Intercepting before financial panic takes hold.
-        </p>
-
-        {/* Central 3D Holographic Wireframe Shield (Floating Interactive Kinetic Core) */}
-        <div 
-          string="parallax"
-          string-factor="0.3"
-          className="w-72 h-72 sm:w-88 sm:h-88 my-6 relative flex items-center justify-center animate-float-slow"
-        >
-          <CyberHologramShield3D 
-            riskScore={threatLevel === "CRITICAL" ? 0.95 : threatLevel === "WARN" ? 0.6 : 0.05}
-            level={threatLevel}
-            isAudioActive={isRunning}
-            className="w-full h-full"
-          />
         </div>
 
-        {/* Minimalist Floating Metrics HUD */}
-        <div 
-          string="parallax"
-          string-factor="0.15"
-          className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl w-full mb-8"
-        >
-          <div className="glass-panel rounded-2xl p-4 text-center border border-white/5">
-            <div className="text-2xl sm:text-3xl font-black font-mono text-cyan-400">&lt; 300ms</div>
-            <div className="text-[11px] text-slate-400 font-mono mt-1">Glass-to-Glass Latency</div>
+        {/* Hero Title Block (Video Accurate Typography) */}
+        <div className="relative z-10 max-w-4xl mt-6">
+          <div className="text-[10px] font-mono tracking-widest text-[#e11d48] font-bold uppercase mb-2">
+            V_ 2.0.4 · AUTONOMOUS COGNITIVE DEFENSE
           </div>
-          <div className="glass-panel rounded-2xl p-4 text-center border border-white/5">
-            <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-400">100%</div>
-            <div className="text-[11px] text-slate-400 font-mono mt-1">On-Device Privacy</div>
-          </div>
-          <div className="glass-panel rounded-2xl p-4 text-center border border-white/5">
-            <div className="text-2xl sm:text-3xl font-black font-mono text-amber-400">5-Stage</div>
-            <div className="text-[11px] text-slate-400 font-mono mt-1">Intent Kill Chain</div>
-          </div>
-          <div className="glass-panel rounded-2xl p-4 text-center border border-white/5">
-            <div className="text-2xl sm:text-3xl font-black font-mono text-rose-400">₹4,057 Cr</div>
-            <div className="text-[11px] text-slate-400 font-mono mt-1">National Scam Siphon</div>
+          
+          <h1 className="font-display text-5xl sm:text-7xl md:text-8xl font-black tracking-tight leading-[0.98] text-white">
+            Master <br />
+            Your Safety
+          </h1>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-6">
+            <span className="text-xs font-mono text-slate-400">
+              Built by Team KANYARASI · Colossus 3.0
+            </span>
+            <span className="text-slate-600 hidden sm:inline">|</span>
+            <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider">
+              CSS-FIRST. JS-LIGHT · 60 FPS
+            </span>
           </div>
         </div>
 
-        {/* Magnetic Kinetic Action Buttons */}
-        <div 
-          string="parallax"
-          string-factor="0.05"
-          className="flex flex-col sm:flex-row items-center gap-4"
-        >
-          <a
-            href="#interceptor"
-            string="magnetic"
-            className="shimmer-button bg-gradient-to-r from-cyan-500 to-emerald-400 text-black font-bold font-mono text-sm px-8 py-3.5 rounded-full shadow-xl shadow-cyan-500/25 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <Zap className="w-4 h-4 fill-black" />
-            <span>EXPERIENCE LIVE INTERCEPT</span>
-          </a>
-
-          <a
-            href="#warfare"
-            string="magnetic"
-            className="glass-panel text-slate-200 hover:text-white font-mono text-sm px-6 py-3.5 rounded-full border border-white/10 hover:border-cyan-500/50 hover:bg-slate-900/60 transition-all cursor-pointer"
-          >
-            VIEW 3D CYBER WARFARE
-          </a>
+        {/* Central Dual Conductor Unsheathe (Video Katana Horizontal Parallax Metaphor) */}
+        <div className="relative z-10 my-8">
+          <DualConductorUnsheathe />
         </div>
 
-        {/* Scroll Indicator */}
-        <a 
-          href="#killchain" 
-          className="mt-14 flex flex-col items-center gap-1.5 text-slate-500 hover:text-slate-300 transition-colors text-[10px] font-mono tracking-widest cursor-pointer"
-        >
-          <span>SCROLL TO WITNESS ARCHITECTURE</span>
-          <ArrowDown className="w-3.5 h-3.5 animate-bounce" />
-        </a>
-      </section>
-
-      {/* =========================================================================
-          SECTION 2: 5-Stage Mathematical Kill Chain (Kinetic Photon Pipeline)
-          ========================================================================= */}
-      <section id="killchain" className="py-24 px-4 max-w-6xl mx-auto w-full">
-        <div className="text-center mb-12">
-          <div className="text-cyan-400 font-mono text-xs tracking-widest mb-2 font-bold">
-            [ MATHEMATICAL CONJUNCTION PROTOCOL ]
+        {/* Bottom Hero Telemetry Row */}
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-white/10 pt-4 text-[11px] font-mono text-slate-400">
+          <div className="flex items-center gap-4">
+            <span>FOR IN-CALL EXTORTION AND VOICE-CLONE NEUTRALIZATION</span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white">
-            How Extortion Dies in Flight
-          </h2>
-          <p className="text-slate-400 text-sm max-w-xl mx-auto mt-3">
-            XORcall does not rely on single keywords. An alert fires only when the rigorous 5-stage extortion sequence converges.
-          </p>
-        </div>
-
-        {/* Interconnected Glowing Conduit Nodes */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 relative">
-          {[
-            {
-              num: "01",
-              title: "Impersonation",
-              desc: "Spoofed CBI / Police / Telecom Authority badge",
-              accent: "border-cyan-500/40 text-cyan-400"
-            },
-            {
-              num: "02",
-              title: "Coercion",
-              desc: "Non-bailable warrant & Digital Arrest threat",
-              accent: "border-blue-500/40 text-blue-400"
-            },
-            {
-              num: "03",
-              title: "Isolation",
-              desc: "Demand to stay on video call and lock room",
-              accent: "border-amber-500/40 text-amber-400"
-            },
-            {
-              num: "04",
-              title: "Liquidation",
-              desc: "Immediate RTGS / UPI to 'Safe Escrow Vault'",
-              accent: "border-rose-500/40 text-rose-400"
-            },
-            {
-              num: "05",
-              title: "Watchdog Kill",
-              desc: "AnyDesk / RustDesk screen Trojan blocked instantly",
-              accent: "border-emerald-500/40 text-emerald-400"
-            }
-          ].map((node, i) => (
-            <div 
-              key={node.num}
-              string="parallax"
-              string-factor={(0.05 * (i + 1)).toFixed(2)}
-              className="glass-panel glass-card-interactive rounded-2xl p-5 border border-white/10 flex flex-col justify-between"
-            >
-              <div>
-                <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${node.accent} bg-slate-950/60`}>
-                  STAGE {node.num}
-                </span>
-                <h3 className="text-lg font-black text-white mt-3">{node.title}</h3>
-                <p className="text-xs text-slate-400 mt-2 leading-relaxed">{node.desc}</p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[10px] font-mono text-slate-500">
-                <span>STAGE VERIFIED</span>
-                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
-              </div>
-            </div>
-          ))}
+          <div className="flex items-center gap-3">
+            <span className="text-white font-bold">&lt;300MS COGNITIVE SPEED</span>
+            <span>·</span>
+            <span className="text-emerald-400">0% CLOUD VOICE RETENTION</span>
+          </div>
         </div>
       </section>
 
       {/* =========================================================================
-          SECTION 3: Interactive 3D Cyber Warfare War Room
+          ACT 2: TRANSITION TO WARM ARCHITECTURAL BONE / CHALK THEME (#e2dde3)
           ========================================================================= */}
-      <section id="warfare" className="py-20 px-4 max-w-6xl mx-auto w-full">
-        <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10 overflow-hidden relative">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div className="w-full transition-colors duration-700 bg-[#e2dde3] text-[#14151a]">
+        
+        {/* Section: Word Blur-Morph (Accurate to Video frame_0481 & frame_0500) */}
+        <section id="ladder" className="relative border-t border-black/10 overflow-hidden">
+          
+          {/* Header Block (Exact styling from frame_0481 "Code With Clarity") */}
+          <div className="pt-20 px-8 max-w-6xl mx-auto flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
             <div>
-              <div className="text-xs font-mono text-rose-400 font-bold tracking-wider mb-1 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                <span>CROSS-BORDER SYNDICATE TELEMETRY</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white">
-                Live Cyber Warfare Matrix
+              <h2 className="font-display text-4xl sm:text-6xl font-black tracking-tight text-[#14151a] leading-none">
+                Defend <br />
+                With Clarity
               </h2>
             </div>
-            <div className="text-xs font-mono text-slate-400 bg-slate-950/80 border border-white/10 px-3 py-1.5 rounded-full">
-              DRAG ORBIT · CAMBODIA/MYANMAR TO INDIA ARCS
+            <div className="text-[11px] font-mono tracking-widest text-[#70717b] uppercase max-w-xs">
+              BUILT TO TUNE YOUR SAFETY, <br />
+              NOT FIGHT YOUR PHONE LINE
             </div>
           </div>
 
-          <div className="w-full h-[440px] rounded-2xl overflow-hidden border border-white/5 bg-slate-950/80">
-            <CyberWarfareGlobe3D />
-          </div>
-        </div>
-      </section>
+          {/* Kinetic Center Blur Morphing Words */}
+          <WordBlurMorph />
 
-      {/* =========================================================================
-          SECTION 4: Minimalist Real-Time Interceptor Console (No Clutter!)
-          ========================================================================= */}
-      <section id="interceptor" className="py-20 px-4 max-w-6xl mx-auto w-full">
-        <div className="text-center mb-8">
-          <div className="text-cyan-400 font-mono text-xs tracking-widest mb-2 font-bold">
-            [ ZERO STATIC CONTAINERS · REAL-TIME SIMULATION ]
-          </div>
-          <h2 className="text-3xl sm:text-5xl font-black text-white">
-            Interactive Extortion Interceptor
-          </h2>
-          <p className="text-slate-400 text-sm max-w-lg mx-auto mt-2">
-            Select a live extortion vector and trigger real-time on-device speech interception.
-          </p>
-        </div>
-
-        {/* Sleek Scenario Pills */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
-          {SCENARIOS.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => {
-                setSelectedScenario(s);
-                handleResetSimulation();
-              }}
-              string="magnetic"
-              className={`px-4 py-2 rounded-full font-mono text-xs font-bold transition-all cursor-pointer ${
-                selectedScenario.id === s.id
-                  ? "bg-cyan-500 text-black shadow-lg shadow-cyan-500/25 scale-105"
-                  : "glass-panel text-slate-400 hover:text-white border-white/10"
-              }`}
-            >
-              <span>{s.title}</span>
-              <span className="ml-1.5 text-[9px] opacity-75">[{s.tag}]</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Minimal High-Tech Interceptor Cockpit */}
-        <div className="glass-panel-glow rounded-3xl p-6 sm:p-8 max-w-4xl mx-auto border border-cyan-500/30">
-          
-          {/* Top Status & Trigger Row */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${threatLevel === "CRITICAL" ? "bg-red-500 animate-ping" : threatLevel === "WARN" ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`} />
-              <div>
-                <div className="text-xs font-mono font-bold text-white">
-                  STATUS: {threatLevel === "CRITICAL" ? "CRITICAL THREAT INTERCEPTED" : threatLevel === "WARN" ? "ANALYZING KILL CHAIN" : isRunning ? "LINE MONITORING" : "STANDBY"}
-                </div>
-                <div className="text-[10px] font-mono text-slate-400">
-                  SHERPA-ONNX STREAMING · GROQ LPU VERDICT ENGINE
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {!isRunning ? (
-                <button
-                  onClick={handleStartSimulation}
-                  string="magnetic"
-                  className="shimmer-button bg-cyan-500 hover:bg-cyan-400 text-black font-mono font-bold text-xs px-6 py-2.5 rounded-full shadow-lg shadow-cyan-500/30 hover:scale-105 transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <Zap className="w-3.5 h-3.5 fill-black" />
-                  <span>START IN-CALL STREAM</span>
-                </button>
-              ) : (
-                <button
-                  onClick={handleResetSimulation}
-                  string="magnetic"
-                  className="glass-panel text-slate-300 hover:text-white font-mono text-xs px-5 py-2.5 rounded-full border border-white/20 transition-all cursor-pointer"
-                >
-                  RESET STREAM
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Dynamic 3D Audio Frequency Wave */}
-          <div className="my-6 h-36 w-full rounded-2xl overflow-hidden bg-slate-950/80 border border-white/5 relative flex items-center justify-center">
-            <AudioFrequencyRibbon3D isActive={isRunning} amplitude={threatLevel === "CRITICAL" ? 1.8 : 0.8} />
-          </div>
-
-          {/* Conversational Stream Transcript Box */}
-          <div className="bg-slate-950/70 rounded-2xl p-5 border border-white/5 font-mono text-xs min-h-[110px] flex flex-col justify-center">
-            {isRunning ? (
-              <div>
-                <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block mb-1">
-                  [ INCOMING CALL AUDIO CHUNK #{currentLineIndex + 1} ]
-                </span>
-                <p className="text-slate-200 text-sm leading-relaxed">
-                  &ldquo;{selectedScenario.lines[currentLineIndex]}&rdquo;
-                </p>
-              </div>
-            ) : (
-              <p className="text-slate-500 text-center font-mono">
-                Click &ldquo;START IN-CALL STREAM&rdquo; above to simulate real-time call interception.
+          {/* 4-Column Numbered Layout (Exact replication of frame_0481 & frame_0500) */}
+          <div className="max-w-6xl mx-auto px-8 pb-24 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 border-t border-black/10 pt-12">
+            <div>
+              <div className="text-xs font-mono text-[#70717b] mb-2">(1)</div>
+              <h3 className="text-base font-bold text-[#14151a] mb-2">Native Inference</h3>
+              <p className="text-xs text-[#555660] leading-relaxed">
+                Uses native on-device Sherpa-ONNX streaming Zipformer, refined by a precision mathematical formula.
               </p>
-            )}
+            </div>
+
+            <div>
+              <div className="text-xs font-mono text-[#70717b] mb-2">(2)</div>
+              <h3 className="text-base font-bold text-[#14151a] mb-2">Zero-Cloud Privacy</h3>
+              <p className="text-xs text-[#555660] leading-relaxed">
+                Designed with a lightweight offline architecture that lets zero audio stream to remote servers.
+              </p>
+            </div>
+
+            <div>
+              <div className="text-xs font-mono text-[#70717b] mb-2">(3)</div>
+              <h3 className="text-base font-bold text-[#14151a] mb-2">Modular Defenses</h3>
+              <p className="text-xs text-[#555660] leading-relaxed">
+                Configure behavior directly in markup with modular controls — no vibration required until you really want it.
+              </p>
+            </div>
+
+            <div>
+              <div className="text-xs font-mono text-[#70717b] mb-2">(4)</div>
+              <h3 className="text-base font-bold text-[#14151a] mb-2">Forensics Dossier</h3>
+              <p className="text-xs text-[#555660] leading-relaxed">
+                Built for BSA-compliant digital forensics packaging, open to instant 1-click dispatch to 1930 / I4C.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Section: Streamlined Real-Time Interceptor Console */}
+        <section id="interceptor" className="py-20 px-6 max-w-5xl mx-auto border-t border-black/10">
+          <div className="text-center mb-10">
+            <span className="text-xs font-mono font-bold uppercase tracking-widest text-red-600">
+              [ REAL-TIME COGNITIVE DEFENSE ]
+            </span>
+            <h2 className="font-display text-3xl sm:text-5xl font-black text-[#14151a] mt-1">
+              Autonomous Interceptor
+            </h2>
+            <p className="text-xs sm:text-sm text-[#70717b] max-w-md mx-auto mt-2">
+              Select a scam vector below and trigger on-device speech interception in real time.
+            </p>
           </div>
 
-          {/* Verdict & 1930 Auto-Dispatch Banner */}
-          {threatLevel === "CRITICAL" && (
-            <div className="mt-6 p-5 rounded-2xl bg-red-950/60 border border-red-500/50 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
-              <div className="flex items-center gap-3">
-                <AlertOctagon className="w-8 h-8 text-red-400 shrink-0" />
-                <div>
-                  <div className="font-black text-sm text-red-200 font-mono tracking-wide">
-                    BSA-COMPLIANT FORENSICS DOSSIER GENERATED
-                  </div>
-                  <div className="text-[11px] text-red-300 font-mono">
-                    SHA-256: 3e8b...9f41 · Extortion Confidence: 99.4%
-                  </div>
-                </div>
-              </div>
-
+          {/* Scenario Selector Pills */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+            {SCENARIOS.map((s) => (
               <button
-                onClick={() => setDossierDispatched(true)}
-                string="magnetic"
-                disabled={dossierDispatched}
-                className={`px-5 py-2.5 rounded-full font-mono font-bold text-xs shadow-lg transition-all cursor-pointer whitespace-nowrap ${
-                  dossierDispatched
-                    ? "bg-emerald-600 text-white"
-                    : "bg-red-600 hover:bg-red-500 text-white shadow-red-600/30 hover:scale-105"
+                key={s.id}
+                onClick={() => {
+                  setSelectedScenario(s);
+                  handleResetSimulation();
+                }}
+                className={`px-4 py-2 rounded-full font-mono text-xs font-bold transition-all cursor-pointer ${
+                  selectedScenario.id === s.id
+                    ? "bg-[#14151a] text-white shadow-lg scale-105"
+                    : "bg-black/5 text-[#555660] hover:text-[#14151a] hover:bg-black/10"
                 }`}
               >
-                {dossierDispatched ? "✓ DISPATCHED TO 1930 / I4C" : "1-CLICK DISPATCH TO 1930"}
+                <span>{s.title}</span>
+                <span className="ml-1 text-[9px] opacity-60">[{s.tag}]</span>
               </button>
-            </div>
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
 
-      {/* =========================================================================
-          SECTION 5: Modular Sensory Defenses (Judge Critique #3)
-          ========================================================================= */}
-      <section id="sensory" className="py-20 px-4 max-w-6xl mx-auto w-full">
-        <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10">
-          <div className="max-w-2xl mb-8">
-            <div className="text-xs font-mono text-emerald-400 font-bold tracking-wider mb-1">
-              [ JUDGE CRITIQUE #3 ADDRESSED ]
+          {/* Minimalist Interceptor Console Box */}
+          <div className="bg-white/80 rounded-3xl p-6 sm:p-8 border border-black/10 shadow-xl backdrop-blur-md">
+            
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-black/10">
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${threatLevel === "CRITICAL" ? "bg-red-600 animate-ping" : threatLevel === "WARN" ? "bg-amber-500 animate-pulse" : "bg-emerald-600"}`} />
+                <div>
+                  <div className="text-xs font-mono font-bold text-[#14151a]">
+                    STATUS: {threatLevel === "CRITICAL" ? "CRITICAL THREAT INTERCEPTED" : threatLevel === "WARN" ? "CONJUNCTION IN FLIGHT" : isRunning ? "LINE MONITORING" : "STANDBY"}
+                  </div>
+                  <div className="text-[10px] font-mono text-[#70717b]">
+                    SHERPA-ONNX ZIPFORMER · 184MS GROQ LPU
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                {!isRunning ? (
+                  <button
+                    onClick={handleStartSimulation}
+                    className="shimmer-pill-red font-mono font-bold text-xs px-6 py-2.5 rounded-full shadow-lg hover:scale-105 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-white" />
+                    <span>START IN-CALL STREAM</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleResetSimulation}
+                    className="pill-button-light font-mono text-xs px-5 py-2.5 rounded-full transition-all cursor-pointer"
+                  >
+                    RESET STREAM
+                  </button>
+                )}
+              </div>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white">
+
+            {/* Dynamic 3D Audio Frequency Ribbon */}
+            <div className="my-6 h-36 w-full rounded-2xl overflow-hidden bg-[#0f1014] border border-black/10 relative flex items-center justify-center">
+              <AudioFrequencyRibbon3D isActive={isRunning} amplitude={threatLevel === "CRITICAL" ? 1.8 : 0.8} />
+            </div>
+
+            {/* In-Call Transcript Chunk Box */}
+            <div className="bg-[#f2eee9] rounded-2xl p-5 border border-black/5 font-mono text-xs min-h-[100px] flex flex-col justify-center">
+              {isRunning ? (
+                <div>
+                  <span className="text-[10px] text-red-600 font-bold uppercase tracking-wider block mb-1">
+                    [ INCOMING AUDIO PACKET #{currentLineIndex + 1} ]
+                  </span>
+                  <p className="text-[#14151a] text-sm leading-relaxed font-sans font-medium">
+                    &ldquo;{selectedScenario.lines[currentLineIndex]}&rdquo;
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[#70717b] text-center font-mono">
+                  Click &ldquo;START IN-CALL STREAM&rdquo; above to run real-time speech interception.
+                </p>
+              )}
+            </div>
+
+            {/* Verdict & 1930 Auto-Dispatch Banner */}
+            {threatLevel === "CRITICAL" && (
+              <div className="mt-6 p-5 rounded-2xl bg-red-50 border border-red-300 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-300">
+                <div className="flex items-center gap-3">
+                  <AlertOctagon className="w-8 h-8 text-red-600 shrink-0" />
+                  <div>
+                    <div className="font-black text-sm text-red-900 font-mono tracking-wide">
+                      BSA DIGITAL FORENSICS DOSSIER GENERATED
+                    </div>
+                    <div className="text-[11px] text-red-700 font-mono">
+                      SHA-256: 3e8b...9f41 · Extortion Confidence: 99.4%
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setDossierDispatched(true)}
+                  disabled={dossierDispatched}
+                  className={`px-5 py-2.5 rounded-full font-mono font-bold text-xs shadow-lg transition-all cursor-pointer whitespace-nowrap ${
+                    dossierDispatched
+                      ? "bg-emerald-600 text-white"
+                      : "bg-red-600 hover:bg-red-500 text-white shadow-red-600/30 hover:scale-105"
+                  }`}
+                >
+                  {dossierDispatched ? "✓ DISPATCHED TO 1930" : "1-CLICK DISPATCH TO 1930"}
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Section: Modular Sensory Interventions (Judge Critique #3) */}
+        <section className="py-16 px-6 max-w-5xl mx-auto border-t border-black/10">
+          <div className="mb-8">
+            <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#70717b]">
+              [ JUDGE CRITIQUE #3 RESOLUTION ]
+            </span>
+            <h2 className="font-display text-2xl sm:text-3xl font-black text-[#14151a] mt-1">
               Modular Sensory Interventions
             </h2>
-            <p className="text-slate-400 text-xs sm:text-sm mt-2">
-              For users who dislike hardware haptics or vibration, interventions are completely customizable. Haptics default to OFF.
+            <p className="text-xs text-[#70717b] mt-1">
+              Taptic Cheek Haptics default to OFF for vibration-averse users. Choose from In-Ear Whisper or Screen Overlay.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Toggle 1: Taptic Haptics */}
-            <div className="glass-panel rounded-2xl p-5 border border-white/5 flex flex-col justify-between">
+            <div className="bg-white/80 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Vibrate className="w-5 h-5 text-amber-400" />
+                  <Vibrate className="w-5 h-5 text-amber-600" />
                   <input 
                     type="checkbox" 
                     checked={hapticsOn} 
                     onChange={(e) => setHapticsOn(e.target.checked)}
-                    className="w-4 h-4 accent-amber-400 cursor-pointer"
+                    className="w-4 h-4 accent-amber-600 cursor-pointer"
                   />
                 </div>
-                <h3 className="font-bold text-sm text-white">Taptic Cheek Haptics</h3>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Escalating pulse frequencies against cheek during phone calls. (Default: OFF).
-                </p>
+                <h4 className="font-bold text-sm text-[#14151a]">Taptic Haptics</h4>
+                <p className="text-[11px] text-[#70717b] mt-1">Cheek bone pulses. (Default: OFF).</p>
               </div>
-              <div className="text-[10px] font-mono mt-4 text-slate-500">
+              <div className="text-[10px] font-mono text-[#70717b] mt-4">
                 STATUS: {hapticsOn ? "ENABLED" : "OFF (MODULAR)"}
               </div>
             </div>
 
-            {/* Toggle 2: Audio Whisper */}
-            <div className="glass-panel rounded-2xl p-5 border border-white/5 flex flex-col justify-between">
+            <div className="bg-white/80 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Volume2 className="w-5 h-5 text-cyan-400" />
+                  <Volume2 className="w-5 h-5 text-cyan-600" />
                   <input 
                     type="checkbox" 
                     checked={whisperOn} 
                     onChange={(e) => setWhisperOn(e.target.checked)}
-                    className="w-4 h-4 accent-cyan-400 cursor-pointer"
+                    className="w-4 h-4 accent-cyan-600 cursor-pointer"
                   />
                 </div>
-                <h3 className="font-bold text-sm text-white">In-Ear Audio Whisper</h3>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Subtle synthetic voice injection advising victim to disconnect safely.
-                </p>
+                <h4 className="font-bold text-sm text-[#14151a]">Audio Whisper</h4>
+                <p className="text-[11px] text-[#70717b] mt-1">Synthetic TTS voice advising hang up.</p>
               </div>
-              <div className="text-[10px] font-mono mt-4 text-slate-500">
+              <div className="text-[10px] font-mono text-[#70717b] mt-4">
                 STATUS: {whisperOn ? "ACTIVE" : "MUTED"}
               </div>
             </div>
 
-            {/* Toggle 3: Heads-Up Banner */}
-            <div className="glass-panel rounded-2xl p-5 border border-white/5 flex flex-col justify-between">
+            <div className="bg-white/80 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Eye className="w-5 h-5 text-emerald-400" />
+                  <Eye className="w-5 h-5 text-emerald-600" />
                   <input 
                     type="checkbox" 
                     checked={bannerOn} 
                     onChange={(e) => setBannerOn(e.target.checked)}
-                    className="w-4 h-4 accent-emerald-400 cursor-pointer"
+                    className="w-4 h-4 accent-emerald-600 cursor-pointer"
                   />
                 </div>
-                <h3 className="font-bold text-sm text-white">Floating Alert Banner</h3>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  High-contrast overlay floating above WhatsApp and dialer screens.
-                </p>
+                <h4 className="font-bold text-sm text-[#14151a]">Heads-Up Banner</h4>
+                <p className="text-[11px] text-[#70717b] mt-1">Floating overlay over dialer screen.</p>
               </div>
-              <div className="text-[10px] font-mono mt-4 text-slate-500">
+              <div className="text-[10px] font-mono text-[#70717b] mt-4">
                 STATUS: {bannerOn ? "ARMED" : "DISABLED"}
               </div>
             </div>
 
-            {/* Toggle 4: Out-of-Band Family Safe-Ping */}
-            <div className="glass-panel rounded-2xl p-5 border border-white/5 flex flex-col justify-between">
+            <div className="bg-white/80 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <UserCheck className="w-5 h-5 text-blue-400" />
+                  <UserCheck className="w-5 h-5 text-blue-600" />
                   <input 
                     type="checkbox" 
                     checked={familyPingOn} 
                     onChange={(e) => setFamilyPingOn(e.target.checked)}
-                    className="w-4 h-4 accent-blue-400 cursor-pointer"
+                    className="w-4 h-4 accent-blue-600 cursor-pointer"
                   />
                 </div>
-                <h3 className="font-bold text-sm text-white">Family Safe-Ping</h3>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Sends 1-tap &ldquo;I am 100% safe&rdquo; acoustic heartbeat to parents.
-                </p>
+                <h4 className="font-bold text-sm text-[#14151a]">Family Safe-Ping</h4>
+                <p className="text-[11px] text-[#70717b] mt-1">1-tap &ldquo;I am safe&rdquo; heartbeat to parents.</p>
               </div>
               <button
                 onClick={() => setSafePingSent(true)}
-                className="mt-4 text-[10px] font-mono bg-blue-950 text-blue-300 border border-blue-500/40 rounded px-2 py-1 hover:bg-blue-900 transition-colors cursor-pointer"
+                className="mt-4 text-[10px] font-mono bg-blue-100 text-blue-700 rounded px-2 py-1 hover:bg-blue-200 transition-colors cursor-pointer"
               >
                 {safePingSent ? "✓ PING SENT" : "SIMULATE SAFE PING"}
               </button>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* =========================================================================
-          SECTION 6: Market Proof & Community Backing (Judge Critique #1 & #3)
-          ========================================================================= */}
-      <section className="py-20 px-4 max-w-6xl mx-auto w-full">
-        <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <div className="text-xs font-mono text-orange-400 font-bold tracking-wider mb-1">
-                [ DEMOGRAPHIC ACCEPTANCE &amp; COMMUNITY BACKING ]
+        {/* Section: 3D Cyber Warfare War Room */}
+        <section id="warfare" className="py-16 px-6 max-w-5xl mx-auto border-t border-black/10">
+          <div className="bg-[#0f1014] text-white rounded-3xl p-6 sm:p-8 border border-black/20 overflow-hidden shadow-2xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <div className="text-xs font-mono text-red-400 font-bold tracking-wider mb-1">
+                  [ CROSS-BORDER SYNDICATE TELEMETRY ]
+                </div>
+                <h3 className="font-display text-2xl sm:text-3xl font-black text-white">
+                  Live Cyber Warfare Matrix
+                </h3>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white">
-                Validated Across 2,800+ Engineers &amp; Parents
-              </h2>
+              <div className="text-xs font-mono text-slate-400 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
+                DRAG ORBIT · CAMBODIA / MYANMAR TO INDIA ARCS
+              </div>
             </div>
-            <span className="text-xs font-mono text-orange-400 bg-orange-950/60 border border-orange-500/40 px-3 py-1 rounded-full">
-              r/developersIndia · 2,847 UPVOTES
-            </span>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="glass-panel rounded-2xl p-5 border border-white/5">
-              <div className="text-xs font-mono text-slate-400">STUDENTS &amp; YOUTH</div>
-              <div className="text-xl font-black text-cyan-400 mt-1">94.8% Approval</div>
-              <p className="text-xs text-slate-400 mt-2">
-                Demanded Telegram task-scam and campus fee phishing interception without manual friction.
-              </p>
-            </div>
-            <div className="glass-panel rounded-2xl p-5 border border-white/5">
-              <div className="text-xs font-mono text-slate-400">PARENTS &amp; SENIORS</div>
-              <div className="text-xl font-black text-emerald-400 mt-1">98.2% Trust</div>
-              <p className="text-xs text-slate-400 mt-2">
-                Praised Out-of-band &ldquo;I am safe&rdquo; heartbeat ping to neutralize voice-clone kidnap calls immediately.
-              </p>
-            </div>
-            <div className="glass-panel rounded-2xl p-5 border border-white/5">
-              <div className="text-xs font-mono text-slate-400">WORKING PROFESSIONALS</div>
-              <div className="text-xl font-black text-amber-400 mt-1">91.6% Fit</div>
-              <p className="text-xs text-slate-400 mt-2">
-                Adopted AnyDesk remote watchdog blocker against executive wire-transfer trojans.
-              </p>
+            <div className="w-full h-[400px] rounded-2xl overflow-hidden border border-white/5 bg-slate-950">
+              <CyberWarfareGlobe3D />
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* =========================================================================
-          SECTION 7: Native Mobile Apps & 1930 Speed Dial Footer
-          ========================================================================= */}
-      <footer className="border-t border-white/10 bg-black/80 py-12 px-4 text-xs font-mono text-slate-400">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+        {/* Section: Community Proof (r/developersIndia 2.8k Upvotes) */}
+        <section className="py-16 px-6 max-w-5xl mx-auto border-t border-black/10">
+          <div className="bg-white/80 rounded-3xl p-6 sm:p-8 border border-black/10">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-orange-600">
+                  [ STAKEHOLDER ACCEPTANCE DATA ]
+                </span>
+                <h3 className="font-display text-2xl font-black text-[#14151a] mt-1">
+                  Validated Across 2,800+ Engineers &amp; Parents
+                </h3>
+              </div>
+              <span className="text-xs font-mono font-bold text-orange-700 bg-orange-100 px-3 py-1 rounded-full">
+                r/developersIndia · 2,847 UPVOTES
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-2xl bg-[#ede8e3] border border-black/5">
+                <div className="text-xs font-mono text-[#70717b]">STUDENTS &amp; YOUTH</div>
+                <div className="text-xl font-black text-[#14151a] mt-1">94.8% Approval</div>
+                <p className="text-xs text-[#555660] mt-2">
+                  Demanded Telegram task-scam and campus fee phishing interception.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#ede8e3] border border-black/5">
+                <div className="text-xs font-mono text-[#70717b]">PARENTS &amp; SENIORS</div>
+                <div className="text-xl font-black text-[#14151a] mt-1">98.2% Trust</div>
+                <p className="text-xs text-[#555660] mt-2">
+                  Praised Out-of-band safe heartbeat ping to debunk voice-clone kidnappings.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#ede8e3] border border-black/5">
+                <div className="text-xs font-mono text-[#70717b]">WORKING PROFESSIONALS</div>
+                <div className="text-xl font-black text-[#14151a] mt-1">91.6% Fit</div>
+                <p className="text-xs text-[#555660] mt-2">
+                  Adopted AnyDesk remote watchdog blocker against wire-transfer trojans.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Minimal Footer */}
+        <footer className="border-t border-black/10 py-10 px-6 text-xs font-mono text-[#70717b] max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-bold">
-              X
-            </div>
-            <div>
-              <div className="font-bold text-white text-sm">XORcall · Kavach Neural Guardian</div>
-              <div className="text-[10px] text-slate-500">Colossus 3.0 Hackathon · Team KANYARASI</div>
-            </div>
+            <span className="font-bold text-[#14151a]">XORcall · Kavach Neural Guardian</span>
+            <span>·</span>
+            <span>Team KANYARASI</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-[11px]">
-            <span className="text-slate-300">Android: Kotlin + Sherpa-ONNX</span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-300">iOS: CallKit CXCallDirectory</span>
-            <span className="text-slate-600">·</span>
-            <span className="text-cyan-400">FastAPI Groq LPU</span>
+          <div className="flex items-center gap-4">
+            <a href="tel:1930" className="text-red-600 font-bold hover:underline flex items-center gap-1.5">
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span>National Cybercrime Helpline: 1930</span>
+            </a>
           </div>
+        </footer>
 
-          <a
-            href="tel:1930"
-            className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-5 py-2.5 rounded-full shadow-lg shadow-red-600/30 transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <PhoneCall className="w-3.5 h-3.5" />
-            <span>DIAL 1930 NATIONAL CYBER HELPLINE</span>
-          </a>
-        </div>
-      </footer>
-    </main>
+      </div>
+
+    </div>
   );
 }
