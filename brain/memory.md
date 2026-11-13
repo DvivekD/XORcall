@@ -24,3 +24,12 @@
 1. *False Positives (Legitimate vs Scam)*: Mathematical Intent Conjunction Rule + Benign Mitigators (physical hospital presence `-0.40`, institutional ERP `-0.35`). Real emergencies demand physical presence; scams enforce isolation and unverified digital wire transfers.
 2. *Multi-Demographic Scope*: Expanded beyond seniors to college students (Telegram task/fee fraud), working professionals (CEO whaling), and parents (voice clones).
 3. *Modular Sensory Defense*: Customizable alerts (Taptic Cheek Haptics, In-Ear Audio Whisper TTS, Heads-Up Screen Overlay, Silent Family Safe-Ping) for vibration-averse users.
+
+## Hackathon Submission & Pitch Assets
+- **Full-Screen Interactive Pitch Deck (`/pitch`)**: 6 presentation slides with full-screen mode (`F`), arrow key navigation, and high-impact jury defense data.
+- **Turnkey Live Demo CLI (`scripts/run_live_demo.py`)**: 3-second live terminal demonstration of real-time speech intent conjunction (142ms latency), threat escalation, legal dossier creation, and hospital mitigator validation.
+- **Sample BSA Section 63 Forensic Dossier (`fixtures/dossiers/live_demo_dossier.pdf`)**: Real generated tamper-evident evidentiary PDF report with SHA-256 hash.
+- **Devpost Submission Document (`DEVPOST_SUBMISSION.md`)**: Comprehensive copy-pasteable submission text with problem statement, architecture diagrams, challenges, and future roadmap.
+- **Dual-Mode Community Validation (`/community`)**: Interactive upvote / sentiment canvas + high-resolution static Reddit capture.
+- **All 15 Unit Tests Passing**: Verified with `pytest backend/tests -v`.
+- **Git State**: Clean branch `master` pushed to GitHub.
