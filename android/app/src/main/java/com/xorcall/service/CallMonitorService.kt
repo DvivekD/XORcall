@@ -459,6 +459,10 @@ class CallMonitorService : Service(), TelemetryListener {
         }
     }
 
+    override fun onConnectionStateChanged(isConnected: Boolean) {
+        Log.i(TAG, "Telemetry WebSocket connection state changed: $isConnected")
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -491,7 +495,7 @@ class CallMonitorService : Service(), TelemetryListener {
         stopAudioCaptureInternal()
         hapticEngine.stopListening()
         whisperEngine.shutdown()
-        floatingOverlay.dismissOverlay()
+        floatingOverlay.dismiss()
         webSocketClient?.disconnect()
         sttManager.release()
         scope.cancel()
