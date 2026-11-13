@@ -1,11 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowLeft, PhoneCall, ExternalLink } from "lucide-react";
+import { ArrowLeft, PhoneCall, Sparkles, Image as ImageIcon } from "lucide-react";
+import RedditCommunityShowcase from "@/components/community/RedditCommunityShowcase";
 
 export default function CommunityPage() {
+  const [viewMode, setViewMode] = useState<"interactive" | "snapshot">("interactive");
+
   return (
     <div className="min-h-screen bg-[#07090e] text-white flex flex-col justify-between selection:bg-[#ff4500] selection:text-white">
       {/* Sticky Top Header */}
@@ -27,13 +29,36 @@ export default function CommunityPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
-              r/developersIndia · Community Validation Thread
-            </span>
+          {/* Mode Switcher Pills */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-white/5 border border-white/10 rounded-full p-0.5 text-xs font-mono">
+              <button
+                onClick={() => setViewMode("interactive")}
+                className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === "interactive"
+                    ? "bg-orange-600 text-white font-bold shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Interactive</span>
+              </button>
+              <button
+                onClick={() => setViewMode("snapshot")}
+                className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === "snapshot"
+                    ? "bg-orange-600 text-white font-bold shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Screenshot</span>
+              </button>
+            </div>
+
             <a
               href="tel:1930"
-              className="text-xs font-mono font-bold px-3.5 py-1.5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg flex items-center gap-1.5 transition-all"
+              className="text-xs font-mono font-bold px-3.5 py-1.5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg flex items-center gap-1.5 transition-all hidden sm:flex"
             >
               <PhoneCall className="w-3.5 h-3.5" />
               <span>1930 Helpline</span>
@@ -42,16 +67,22 @@ export default function CommunityPage() {
         </div>
       </header>
 
-      {/* Main Content: Pixel-Perfect Static Reddit Community Showcase */}
+      {/* Main Content: Interactive or High-Resolution Static View */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 flex flex-col items-center">
-        <div className="w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0e1117] transition-all">
-          <img
-            src="/images/reddit-community.jpg"
-            alt="r/developersIndia XORcall Community Validation Thread"
-            className="w-full h-auto object-contain select-none block"
-            loading="eager"
-          />
-        </div>
+        {viewMode === "interactive" ? (
+          <div className="w-full animate-in fade-in duration-300">
+            <RedditCommunityShowcase />
+          </div>
+        ) : (
+          <div className="w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0e1117] transition-all animate-in fade-in duration-300">
+            <img
+              src="/images/reddit-community.jpg"
+              alt="r/developersIndia XORcall Community Validation Thread"
+              className="w-full h-auto object-contain select-none block"
+              loading="eager"
+            />
+          </div>
+        )}
       </main>
 
       {/* Footer */}
