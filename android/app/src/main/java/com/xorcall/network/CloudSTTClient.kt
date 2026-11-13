@@ -120,6 +120,10 @@ class CloudSTTClient(
                         .addFormDataPart("response_format", "json")
                         .addFormDataPart("language", "en")
                         .addFormDataPart("temperature", "0.0")
+                        .addFormDataPart(
+                            "prompt",
+                            "extortion, 5 lakhs, digital arrest, police custody, CBI, narcotics, MDMA, FedEx parcel, RBI escrow, kidnapping, transfer money, bail amount, murder, ICU, hospital, court order, UPI"
+                        )
                         .build()
 
                     val request = Request.Builder()

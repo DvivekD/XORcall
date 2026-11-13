@@ -46,26 +46,26 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.2-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.3-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.2.2-debug.apk
+          path: build-artifacts/XORcall-v1.2.3-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.2-apk
-          name: "XORcall v1.2.2 Android APK (Permanent Signing Keystore + Live Mic Crash Fix + Android 14 In-Call Audio)"
+          tag_name: v1.2.3-apk
+          name: "XORcall v1.2.3 Android APK (Adaptive Soft-Knee AGC + Groq Prompt Biasing + Phonetic Extortion Radar)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.2
-            - **Permanent Cryptographic Signing Keystore (v1 + v2 Schemes)**: Configured committed debug keystore with both v1 (JAR signing) and v2 (APK Signing Block 42) enabled. Prevents `INSTALL_FAILED_UPDATE_INCOMPATIBLE` ("Check APK") errors on Vivo FuntouchOS / Android package installers.
-            - **Live Mic Speak Test & Overlay Thread Safety Fix**: Resolved `CalledFromWrongThreadException` and Compose background snapshot mutation by executing all UI mutations and `FloatingAlertOverlay` WindowManager calls strictly on `Dispatchers.Main` / `Looper.getMainLooper()`.
-            - **Android 14 In-Call Audio Stream (`VOICE_RECOGNITION`)**: Prioritized `MediaRecorder.AudioSource.VOICE_RECOGNITION` over `MIC` during telephony communication (`OFFHOOK`), bypassing Android 14 `AudioPolicy` silence suppression and hardware acoustic echo cancellation.
-            - **Modern Android 12+ (API 31+) Speakerphone Routing**: Switched from deprecated `isSpeakerphoneOn` to `AudioManager.setCommunicationDevice(TYPE_BUILTIN_SPEAKER)`, ensuring reliable auto-speakerphone activation during active phone calls on Android 12, 13, and 14 (tested on FuntouchOS / MediaTek Dimensity).
-            - **Calibrated AI Voice vs Biological Human Detection**: Redesigned acoustic radar scoring model with biological vocal fold micro-jitter (>0.5% jitter verifies natural human voice, forcing synthetic confidence to nominal <0.10). AI voice clone flag strictly requires rigid neural pitch contour (<0.28% micro-jitter over >=6 voiced frames) and elevated spectral Wiener entropy (>0.42).
-          files: build-artifacts/XORcall-v1.2.2-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.3
+            - **Adaptive Soft-Knee Digital AGC (No Clipping Distortion)**: Eliminated harsh `7.5x tanh` saturation on max-volume speakerphone audio. Replaced with dynamic peak-tracking automatic gain control that maintains pristine, distortion-free speech formants for Vosk and Whisper.
+            - **Groq Whisper Turbo Domain Prompt Biasing**: Injected cyber extortion, Digital Arrest, police custody, and Indian currency prompt biasing into Whisper Turbo multipart requests, drastically increasing recognition probability on accents and loud in-call audio.
+            - **Comprehensive Phonetic Extortion Normalizer**: Added coverage for split words, acoustic distortions, and misrecognitions ("police custom" -> "police custody", "digital address" -> "digital arrest", "five lock/lacks/block" -> "5 lakh", "egg stortion" -> "extortion", "why are transfer" -> "wire transfer").
+            - **One-Tap Quick Paste Groq API Key**: Added one-tap "📋 Paste Key" in the Cloud STT configuration dialog with direct guidance on free instant key generation at `console.groq.com`.
+            - **Permanent Cryptographic Keystore (v1 + v2 Schemes)**: Pre-signed with committed debug keystore for seamless in-place updates.
+          files: build-artifacts/XORcall-v1.2.3-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

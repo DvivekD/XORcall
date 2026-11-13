@@ -406,8 +406,6 @@ class CallMonitorService : Service(), TelemetryListener {
 
                     val pcmBuffer = ShortArray(bufferSize / 2)
                     val boostedBuffer = ShortArray(bufferSize / 2)
-                    // Hardware Digital AGC Pre-Amplifier: +20dB boost (gain factor ~7.5) with soft saturation limiter
-                    val digitalGain = 7.5f
 
                     var loopIteration = 0
                     while (isRecording && isActive) {
@@ -427,17 +425,30 @@ class CallMonitorService : Service(), TelemetryListener {
 
                         val readCount = record.read(pcmBuffer, 0, pcmBuffer.size)
                         if (readCount > 0) {
-                            var sumSquares = 0.0
+                            // Adaptive Headroom AGC: Measure peak to prevent distortion on loudspeaker
+                            var peakVal = 0
                             for (i in 0 until readCount) {
-                                val rawSample = pcmBuffer[i].toFloat() / 32768.0f
-                                // Soft-saturation limiter
-                                val amplified = tanh(rawSample * digitalGain)
-                                val finalSample = (amplified * 32767.0f).toInt().coerceIn(-32768, 32767).toShort()
-                                boostedBuffer[i] = finalSample
-                                sumSquares += finalSample.toDouble() * finalSample.toDouble()
+                                val s = kotlin.math.abs(pcmBuffer[i].toInt())
+                                if (s > peakVal) peakVal = s
                             }
 
-                            // Feed boosted PCM directly to on-device Vosk STT + Acoustic AI Voice engine
+                            // If speakerphone is at max volume (peak > 18000), gain is 1.0f (no clipping!)
+                            // If audio is soft/distant, gain gently scales up to 3.5f without buzzing
+                            val adaptiveGain = when {
+                                peakVal > 18000 -> 1.0f
+                                peakVal > 8000 -> 18000f / peakVal
+                                peakVal > 2000 -> (18000f / peakVal).coerceAtMost(3.5f)
+                                else -> 2.0f
+                            }
+
+                            var sumSquares = 0.0
+                            for (i in 0 until readCount) {
+                                val sample = (pcmBuffer[i] * adaptiveGain).toInt().coerceIn(-32767, 32767).toShort()
+                                boostedBuffer[i] = sample
+                                sumSquares += sample.toDouble() * sample.toDouble()
+                            }
+
+                            // Feed clean boosted PCM directly to on-device Vosk STT + Cloud Whisper + AI Voice engine
                             sttManager.acceptAudioChunkRaw(boostedBuffer, readCount)
 
                             val rms = sqrt(sumSquares / readCount) / 32768.0

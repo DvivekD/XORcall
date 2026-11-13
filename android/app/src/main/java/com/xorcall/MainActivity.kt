@@ -292,17 +292,25 @@ fun MainScreen(
                     recorder.startRecording()
                     val pcmBuffer = ShortArray(minBuf / 2)
                     val boostedBuffer = ShortArray(minBuf / 2)
-                    val digitalGain = 6.0f
                     val endAt = System.currentTimeMillis() + 6000L
                     var lastUiUpdate = 0L
                     while (System.currentTimeMillis() < endAt && isMicTesting) {
                         val read = recorder.read(pcmBuffer, 0, pcmBuffer.size)
                         if (read > 0) {
+                            var peakVal = 0
+                            for (i in 0 until read) {
+                                val s = kotlin.math.abs(pcmBuffer[i].toInt())
+                                if (s > peakVal) peakVal = s
+                            }
+                            val adaptiveGain = when {
+                                peakVal > 18000 -> 1.0f
+                                peakVal > 8000 -> 18000f / peakVal
+                                peakVal > 2000 -> (18000f / peakVal).coerceAtMost(3.5f)
+                                else -> 2.0f
+                            }
                             var sumSquares = 0.0
                             for (i in 0 until read) {
-                                val raw = pcmBuffer[i].toFloat() / 32768.0f
-                                val amp = kotlin.math.tanh(raw * digitalGain)
-                                val sample = (amp * 32767.0f).toInt().coerceIn(-32768, 32767).toShort()
+                                val sample = (pcmBuffer[i] * adaptiveGain).toInt().coerceIn(-32767, 32767).toShort()
                                 boostedBuffer[i] = sample
                                 sumSquares += sample.toDouble() * sample.toDouble()
                             }
@@ -808,12 +816,27 @@ fun MainScreen(
                             unfocusedBorderColor = Color(0xFF334155)
                         )
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Leave blank to use 100% On-Device Offline Vosk STT.",
-                        color = Color(0xFF64748B),
-                        fontSize = 9.sp
-                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Free 25k req/day at console.groq.com",
+                            color = Color(0xFF38BDF8),
+                            fontSize = 9.sp
+                        )
+                        TextButton(
+                            onClick = {
+                                clipboardManager.getText()?.text?.let { groqKeyInput = it.trim() }
+                            },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("📋 Paste Key", fontSize = 10.sp, color = Color(0xFF34D399))
+                        }
+                    }
                 }
             },
             confirmButton = {

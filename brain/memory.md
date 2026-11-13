@@ -12,6 +12,11 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **Adaptive Soft-Knee AGC & Groq Whisper Domain Prompt Biasing (`v1.2.3`)**:
+  1. *Adaptive Soft-Knee AGC*: Eliminated harsh `7.5x tanh` saturation on max-volume speakerphone audio. Replaced with dynamic peak-tracking automatic gain control that maintains pristine, distortion-free speech formants for Vosk and Whisper.
+  2. *Groq Whisper Turbo Domain Prompt Biasing*: Injected cyber extortion, Digital Arrest, police custody, and Indian currency prompt biasing into Whisper Turbo multipart requests, drastically increasing recognition probability on accents and loud in-call audio.
+  3. *Comprehensive Phonetic Extortion Normalizer*: Added coverage for split words, acoustic distortions, and misrecognitions ("police custom" -> "police custody", "digital address" -> "digital arrest", "five lock/lacks/block" -> "5 lakh", "egg stortion" -> "extortion", "why are transfer" -> "wire transfer").
+  4. *One-Tap Quick Paste Groq API Key*: Added one-tap "📋 Paste Key" in the Cloud STT configuration dialog with direct guidance on free instant key generation at `console.groq.com`.
 - **Permanent Keystore Signing & In-Place Update Compatibility (`v1.2.2`)**:
   1. *Committed Permanent Keystore (`debug.keystore`)*: Resolved `INSTALL_FAILED_UPDATE_INCOMPATIBLE` ("Check APK") by committing a permanent PKCS12 debug keystore and enabling both `enableV1Signing = true` (JAR signing) and `enableV2Signing = true` (APK Sig Block 42). All future CI builds use the exact same signature, allowing smooth updates without uninstalling.
 - **In-Call Audio Stream (`VOICE_RECOGNITION`), Android 14 Speakerphone Routing & Crash-Proof Mic Test (`v1.2.1`)**:
