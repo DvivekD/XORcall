@@ -2,8 +2,8 @@
 
 @layer base {
   :root {
-    --background: #090d16;
-    --foreground: #f3f4f6;
+    --background: #060911;
+    --foreground: #e2e8f0;
   }
 
   body {
@@ -14,13 +14,28 @@
   }
 }
 
+/* Custom Cyberpunk Grids & Textures */
+.cyber-grid {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.cyber-grid-dense {
+  background-image: 
+    linear-gradient(to right, rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
 /* Custom glow and sonar animations */
 @keyframes pulseGlow {
   0%, 100% {
     box-shadow: 0 0 15px rgba(239, 68, 68, 0.4), inset 0 0 15px rgba(239, 68, 68, 0.2);
   }
   50% {
-    box-shadow: 0 0 30px rgba(239, 68, 68, 0.8), inset 0 0 25px rgba(239, 68, 68, 0.5);
+    box-shadow: 0 0 35px rgba(239, 68, 68, 0.9), inset 0 0 30px rgba(239, 68, 68, 0.6);
   }
 }
 
@@ -32,18 +47,89 @@
   80% { transform: translate(2px, 2px); }
 }
 
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shockwaveExpand {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+    border-width: 3px;
+  }
+  70% {
+    opacity: 0.6;
+    border-width: 2px;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+@keyframes glitchFlicker {
+  0%, 100% { opacity: 1; transform: translate(0, 0); }
+  15% { opacity: 0.85; transform: translate(-1.5px, 1px); }
+  30% { opacity: 0.95; transform: translate(1px, -1px); }
+  45% { opacity: 0.75; transform: translate(-2px, 0.5px); }
+  75% { opacity: 1; transform: translate(0, 0); }
+}
+
 .animate-pulse-glow {
-  animation: pulseGlow 2s infinite ease-in-out;
+  animation: pulseGlow 1.8s infinite ease-in-out;
 }
 
 .animate-haptic {
-  animation: hapticVibrate 0.15s infinite;
+  animation: hapticVibrate 0.12s infinite;
+}
+
+.animate-radar-sweep {
+  animation: radarSweep 3s linear infinite;
+}
+
+.animate-shockwave-1 {
+  animation: shockwaveExpand 2.4s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+.animate-shockwave-2 {
+  animation: shockwaveExpand 2.4s cubic-bezier(0.1, 0.8, 0.3, 1) infinite 0.8s;
+}
+
+.animate-shockwave-3 {
+  animation: shockwaveExpand 2.4s cubic-bezier(0.1, 0.8, 0.3, 1) infinite 1.6s;
+}
+
+.animate-glitch {
+  animation: glitchFlicker 0.4s infinite;
 }
 
 /* Glassmorphism utility */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(10, 16, 29, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-glow {
+  background: rgba(10, 16, 29, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.12);
+}
+
+.glass-panel-danger {
+  background: rgba(28, 10, 15, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 35px rgba(239, 68, 68, 0.25);
 }

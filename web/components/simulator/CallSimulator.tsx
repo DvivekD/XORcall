@@ -4,8 +4,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   ShieldAlert, ShieldCheck, PhoneCall, PhoneOff, Mic, Video, 
   AlertTriangle, Download, UserCheck, Bot, Activity, MapPin, Radio,
-  Volume2, BellOff, Vibrate, Eye, CheckCircle2, Sliders, VolumeX
+  Volume2, BellOff, Vibrate, Eye, CheckCircle2, Sliders, VolumeX,
+  Radar, Sparkles, Terminal, Waves, Zap
 } from "lucide-react";
+import CyberHologramShield3D from "@/components/motion/CyberHologramShield3D";
+import ThreatRadar2D from "@/components/motion/ThreatRadar2D";
+import AudioWaveformSpectrum2D from "@/components/motion/AudioWaveformSpectrum2D";
+import ShockwavePulseRings from "@/components/motion/ShockwavePulseRings";
+import { AnimatedCounter } from "@/components/motion/LiveTelemetryTicker";
 
 interface TelemetryResult {
   session_id: string;
@@ -28,9 +34,9 @@ const PREBAKED_SCENARIOS = [
   {
     id: "digital_arrest",
     demographic: "SENIOR_CITIZEN",
-    demographicLabel: "Senior Citizen",
-    title: "1. Digital Arrest (CBI Narcotics Parcel)",
-    description: "Fake police officer intimidates retiree with arrest warrant, enforces video isolation, demands RTGS.",
+    demographicLabel: "SENIOR",
+    title: "Digital Arrest (CBI Narcotics)",
+    vector: "CBI Pretext · Video Confinement · ₹4L RTGS Mule",
     lines: [
       "Hello, I am Inspector Rao from Mumbai Crime Branch Cyber Cell.",
       "A parcel sent under your Aadhaar card containing 140g of MDMA narcotics was seized by customs.",
@@ -42,9 +48,9 @@ const PREBAKED_SCENARIOS = [
   {
     id: "family_deepfake",
     demographic: "PARENT",
-    demographicLabel: "Parents & Families",
-    title: "2. Family Deepfake (Son Car Accident)",
-    description: "Cloned voice of child claiming fatal crash and police custody, demanding immediate UPI bail.",
+    demographicLabel: "PARENT",
+    title: "Family Deepfake (Car Crash)",
+    vector: "Cloned Voice · Custody Hoax · Urgent UPI Bail",
     lines: [
       "Papa! My phone broke in the accident, I'm calling from an unknown number!",
       "I hit someone on the highway... police took me into custody, please help me Papa!",
@@ -55,9 +61,9 @@ const PREBAKED_SCENARIOS = [
   {
     id: "student_task_scam",
     demographic: "STUDENT_YOUTH",
-    demographicLabel: "College Student",
-    title: "3. Student Telegram Part-Time Job Scam",
-    description: "Fake work-from-home rating task trap demanding prepaid crypto deposit to unlock profits.",
+    demographicLabel: "STUDENT",
+    title: "Telegram Part-Time Task Trap",
+    vector: "Rating Task · Crypto Recharge · Balance Freeze",
     lines: [
       "Hello! Earn 5000 daily with our flexible student part-time job from home.",
       "Simple telegram task: like YouTube videos and review hotel listings on Google Maps.",
@@ -69,9 +75,9 @@ const PREBAKED_SCENARIOS = [
   {
     id: "ceo_whaling",
     demographic: "WORKING_PROFESSIONAL",
-    demographicLabel: "Working Professional",
-    title: "4. Corporate CEO Whaling Impersonation",
-    description: "Executive impersonation demanding urgent wire transfer for confidential acquisition.",
+    demographicLabel: "TECH/EXEC",
+    title: "Executive Whaling Phish",
+    vector: "CEO Pretext · Board Silence · ₹8L Vendor Wire",
     lines: [
       "Hi, this is Rajesh Verma, CEO. I am in a board meeting right now, do not call my mobile number.",
       "We have an urgent deadline to close a confidential client settlement before 5 PM today.",
@@ -82,9 +88,9 @@ const PREBAKED_SCENARIOS = [
   {
     id: "college_fee_phishing",
     demographic: "STUDENT_YOUTH",
-    demographicLabel: "Student / Campus",
-    title: "5. Campus Fee Portal Phishing (BITS Pilani)",
-    description: "Syndicate posing as university registrar threatening seat cancellation unless paid to personal UPI.",
+    demographicLabel: "CAMPUS",
+    title: "Campus Fee Portal Phishing",
+    vector: "Seat Hold Pretext · Fake Registrar · Direct UPI",
     lines: [
       "Urgent alert from BITS Pilani university registrar office regarding semester admission.",
       "Your semester hostel and tuition fee transaction failed on the college fee portal.",
@@ -95,9 +101,9 @@ const PREBAKED_SCENARIOS = [
   {
     id: "real_hospital",
     demographic: "GENERAL",
-    demographicLabel: "Benign Medical ER",
-    title: "6. Genuine Hospital ER Triage (Apollo)",
-    description: "Legitimate ER doctor asking family to visit emergency ward in person (Zero digital payment asked).",
+    demographicLabel: "BENIGN_ER",
+    title: "Genuine Hospital ER Triage",
+    vector: "Physical Attendance · Zero Digital Siphon · Safe Control",
     lines: [
       "Hello, this is Dr. Mehta from Apollo Hospital Emergency & Trauma Care.",
       "Your son Rahul was admitted here 20 minutes ago following a minor bike slip.",
@@ -117,86 +123,80 @@ export default function CallSimulator() {
     session_id: "SIM-2026-LIVE",
     risk_score: 0.05,
     level: "SAFE",
-    threat_type: "NORMAL_STANDBY",
+    threat_type: "STANDBY_MONITORING",
     demographic_target: "GENERAL",
     stage: 1,
     kill_chain_stage: 1,
-    flags: [],
-    conjunction_explanation: "Standing by for call audio..."
+    flags: ["carrier_clean", "rf_baseline_nominal"]
   });
 
-  // User-Configurable Sensory Intervention Modalities (Addressing Judge Feedback)
-  const [interventionConfig, setInterventionConfig] = useState<{
-    haptics: boolean;
-    audioWhisper: boolean;
-    silentFamilyPing: boolean;
-    headsUpBanner: boolean;
-  }>({
-    haptics: false, // Default toggled according to judge's preference for silent / whisper
+  // Intervention Config
+  const [interventionConfig, setInterventionConfig] = useState({
+    haptics: true,
     audioWhisper: true,
     silentFamilyPing: true,
     headsUpBanner: true
   });
 
-  const [whisperPlaying, setWhisperPlaying] = useState<boolean>(false);
-
-  // Decoy & Safe-Ping states
+  // Decoy & Honeypot State
   const [decoyActive, setDecoyActive] = useState<boolean>(false);
   const [secondsWasted, setSecondsWasted] = useState<number>(0);
   const [harvestedIocs, setHarvestedIocs] = useState<{ upi_ids: string[]; bank_accounts: string[] }>({
     upi_ids: [],
     bank_accounts: []
   });
+
+  // Family Safe-Ping Status
   const [safePingStatus, setSafePingStatus] = useState<"IDLE" | "PENDING" | "CONFIRMED">("IDLE");
 
-  // Synthetic Video Deepfake inspection stats
+  // Vision inspection simulation
   const [fftScore, setFftScore] = useState<number>(0.12);
   const [seamAnomaly, setSeamAnomaly] = useState<boolean>(false);
+  const [whisperPlaying, setWhisperPlaying] = useState<boolean>(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Play audio whisper via SpeechSynthesis API
-  const triggerAudioWhisper = (message: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
+  // In-Ear Audio Whisper speech synthesizer
+  const triggerAudioWhisper = (phrase: string) => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(message);
-      utterance.rate = 1.0;
-      utterance.pitch = 0.9;
-      utterance.volume = 0.85;
-      utterance.onstart = () => setWhisperPlaying(true);
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      utterance.rate = 1.05;
+      utterance.pitch = 0.95;
+      setWhisperPlaying(true);
       utterance.onend = () => setWhisperPlaying(false);
       utterance.onerror = () => setWhisperPlaying(false);
       window.speechSynthesis.speak(utterance);
-    } catch {
-      setWhisperPlaying(false);
     }
   };
 
-  // Play prebaked scenario line by line
   const handlePlayScenario = () => {
     setIsPlaying(true);
     setTranscript([]);
     setCurrentLineIndex(0);
     setDecoyActive(false);
-    setSafePingStatus("IDLE");
     setSecondsWasted(0);
+    setSafePingStatus("IDLE");
+    setFftScore(0.12);
+    setSeamAnomaly(false);
 
     const scenario = PREBAKED_SCENARIOS.find((s) => s.id === activeScenario);
     if (!scenario) return;
 
-    let index = 0;
-    timerRef.current = setInterval(async () => {
-      if (index >= scenario.lines.length) {
-        clearInterval(timerRef.current!);
-        setIsPlaying(false);
-        return;
-      }
+    let idx = 0;
+    sendTurnToBackend(scenario.lines[0]);
 
-      const line = scenario.lines[index];
-      await sendTurnToBackend(line);
-      index++;
-      setCurrentLineIndex(index);
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    timerRef.current = setInterval(() => {
+      idx++;
+      if (idx < scenario.lines.length) {
+        setCurrentLineIndex(idx);
+        sendTurnToBackend(scenario.lines[idx]);
+      } else {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setIsPlaying(false);
+      }
     }, 2800);
   };
 
@@ -222,10 +222,9 @@ export default function CallSimulator() {
       setTelemetry(data);
       setTranscript((prev) => [...prev, { text: utterance, role: "caller", flags: data.trigger_flags || [] }]);
 
-      // Trigger user-configured interventions on WARN/CRITICAL
       if (data.level === "CRITICAL" || data.level === "WARN") {
         if (interventionConfig.audioWhisper) {
-          triggerAudioWhisper("XORcall Warning: Suspected cyber extortion detected. Do not transfer any funds.");
+          triggerAudioWhisper("XORcall Warning: Suspected extortion call detected. Do not transfer funds.");
         }
         if (interventionConfig.silentFamilyPing && safePingStatus === "IDLE") {
           handleTriggerSafePing();
@@ -237,13 +236,11 @@ export default function CallSimulator() {
         }
       }
 
-      // Simulate deepfake vision check on video call lines
       if (utterance.toLowerCase().includes("video") || utterance.toLowerCase().includes("camera")) {
-        setFftScore(0.86);
+        setFftScore(0.88);
         setSeamAnomaly(true);
       }
     } catch {
-      // Local fallback simulation if backend is not running
       simulateLocalTurn(utterance);
     }
   };
@@ -259,36 +256,36 @@ export default function CallSimulator() {
 
     let threat_type = "DIGITAL_ARREST_SCAM";
     let flags: string[] = ["authority_claim", "legal_threat", "isolation", "payment_demand"];
-    let stagesTriggered: string[] = ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_3_ISOLATION_CONFINEMENT", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
-    let explanation = `Multi-stage intent conjunction active [${demographic}]. Non-linear kill-chain triggered.`;
+    let stagesTriggered: string[] = ["STAGE_1", "STAGE_2", "STAGE_3", "STAGE_4", "STAGE_5"];
+    let explanation = `[INTENT_CONJUNCTION]: {Authority ∧ Isolation ∧ Direct_Mule_Payment} -> LOCKDOWN`;
 
     if (activeScenario === "real_hospital") {
       threat_type = "GENUINE_MEDICAL_TRIAGE";
       newScore = 0.05;
       level = "SAFE";
-      flags = ["physical_hospital_presence"];
+      flags = ["hospital_in_person_attendance"];
       stagesTriggered = [];
-      explanation = "Legitimate medical triage. In-person hospital attendance requested with zero direct payment demands. Risk mitigated.";
+      explanation = "[BENIGN_MITIGATION]: Zero direct funds requested · Physical ER ward attendance";
     } else if (activeScenario === "student_task_scam") {
       threat_type = "STUDENT_TASK_SCAM";
-      flags = ["task_job_scam", "payment_demand", "urgency"];
-      stagesTriggered = ["STAGE_1_PRETEXT_HOOK", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
-      explanation = "Multi-Stage Intent Kill-Chain Conjunction Triggered [STUDENT_YOUTH]: Telegram Part-Time Task Hook + Prepaid Crypto Recharge Siphon.";
+      flags = ["telegram_job_scam", "crypto_recharge", "urgency"];
+      stagesTriggered = ["STAGE_1", "STAGE_4", "STAGE_5"];
+      explanation = "[TASK_TRAP_CONJUNCTION]: {PartTime_Task_Hook ∧ Prepaid_Recharge_Lock} -> MULE_ALERT";
     } else if (activeScenario === "college_fee_phishing") {
-      threat_type = "COLLEGE_FEE_PHISHING";
-      flags = ["college_fee_phishing", "payment_demand", "urgency"];
-      stagesTriggered = ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
-      explanation = "Multi-Stage Intent Kill-Chain Conjunction Triggered [STUDENT_YOUTH]: BITS Pilani Fee Portal Phishing + Seat Cancellation Pretext + Direct Registrar UPI Demand.";
+      threat_type = "CAMPUS_FEE_PHISHING";
+      flags = ["registrar_spoof", "seat_cancellation", "burner_upi"];
+      stagesTriggered = ["STAGE_1", "STAGE_2", "STAGE_4", "STAGE_5"];
+      explanation = "[CAMPUS_CONJUNCTION]: {Fake_Registrar ∧ Seat_Cancellation ∧ Personal_UPI} -> LOCKDOWN";
     } else if (activeScenario === "ceo_whaling") {
-      threat_type = "CEO_IMPERSONATION_FRAUD";
-      flags = ["corporate_wire_scam", "payment_demand", "urgency"];
-      stagesTriggered = ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
-      explanation = "Multi-Stage Intent Kill-Chain Conjunction Triggered [WORKING_PROFESSIONAL]: Executive Whaling + Board Meeting Silence Pretext + Urgent Vendor Wire.";
+      threat_type = "EXECUTIVE_WHALING";
+      flags = ["ceo_impersonation", "confidential_settlement", "vendor_wire"];
+      stagesTriggered = ["STAGE_1", "STAGE_2", "STAGE_4", "STAGE_5"];
+      explanation = "[WHALING_CONJUNCTION]: {CEO_Pretext ∧ Board_Silence_Gag ∧ Urgent_Wire} -> TRACED";
     } else if (activeScenario === "family_deepfake") {
-      threat_type = "KINSHIP_DEEPFAKE_EXTORTION";
-      flags = ["kinship_emergency", "payment_demand", "urgency"];
-      stagesTriggered = ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
-      explanation = "Multi-Stage Intent Kill-Chain Conjunction Triggered [PARENT]: Kinship AI Voice Clone + Police Custody Threat + Urgent Clinic UPI Bail Demand.";
+      threat_type = "KINSHIP_DEEPFAKE";
+      flags = ["voice_clone_frequency", "custody_bail_panic", "clinic_upi"];
+      stagesTriggered = ["STAGE_1", "STAGE_2", "STAGE_4", "STAGE_5"];
+      explanation = "[KINSHIP_CONJUNCTION]: {AI_Voice_Clone ∧ Custody_Panic ∧ Clinic_UPI} -> SAFE_PING";
     }
 
     const calculatedStage = activeScenario === "real_hospital" ? 1 : (level === "CRITICAL" ? 5 : Math.min(4, (telemetry.kill_chain_stage || 1) + 1));
@@ -311,7 +308,7 @@ export default function CallSimulator() {
 
     if (level === "CRITICAL" || level === "WARN") {
       if (interventionConfig.audioWhisper) {
-        triggerAudioWhisper("XORcall Warning: Suspected extortion call. Hang up immediately.");
+        triggerAudioWhisper("XORcall Warning: Suspected extortion call. Disconnect immediately.");
       }
       if (interventionConfig.silentFamilyPing && safePingStatus === "IDLE") {
         handleTriggerSafePing();
@@ -324,7 +321,6 @@ export default function CallSimulator() {
     }
   };
 
-  // Ramesh Gupta Honeypot transfer
   const handleTransferToDecoy = async () => {
     setDecoyActive(true);
     try {
@@ -339,7 +335,7 @@ export default function CallSimulator() {
       const data = await res.json();
       setTranscript((prev) => [
         ...prev,
-        { text: `[RAMESH GUPTA DECOY]: ${data.reply}`, role: "decoy" }
+        { text: `[RAMESH AI HONEYPOT]: ${data.reply}`, role: "decoy" }
       ]);
       setHarvestedIocs({
         upi_ids: data.harvested_iocs.upi_ids.length ? data.harvested_iocs.upi_ids : ["sbi-safe-supervision@okaxis"],
@@ -348,7 +344,7 @@ export default function CallSimulator() {
     } catch {
       setTranscript((prev) => [
         ...prev,
-        { text: "[RAMESH GUPTA DECOY]: Arre beta, one minute please... my spectacles are on the fridge. Can you repeat the SBI account number slowly?", role: "decoy" }
+        { text: "[RAMESH AI HONEYPOT]: Arre beta, one minute please... my spectacles are on the fridge. Can you repeat the SBI account number slowly?", role: "decoy" }
       ]);
       setHarvestedIocs({
         upi_ids: ["sbi-safe-supervision@okaxis"],
@@ -357,32 +353,27 @@ export default function CallSimulator() {
     }
   };
 
-  // Trigger Out-of-Band Family Safe-Ping
   const handleTriggerSafePing = async () => {
     setSafePingStatus("PENDING");
     try {
       await fetch("http://localhost:8000/api/family/safe-ping/SIM-2026-LIVE", { method: "POST" });
-    } catch {
-      // offline fallback
-    }
-    // Simulate real child tapping "I AM SAFE" after 4 seconds
+    } catch {}
+
     setTimeout(() => {
       setSafePingStatus("CONFIRMED");
       setTelemetry((prev) => ({
         ...prev,
         risk_score: 0.05,
         level: "SAFE",
-        vernacular_summary: "CONFIRMED FRAUD: Safe-Ping confirmed genuine contact is safe. Coercion loop detonated."
+        conjunction_explanation: "[SAFE_PING_CONFIRMED]: Reverse contact verified 100% safe. Coercion loop detonated."
       }));
     }, 3800);
   };
 
-  // Download official 1930 PDF dossier
   const handleDownloadDossier = () => {
     window.open("http://localhost:8000/api/dossier/download/SIM-2026-LIVE", "_blank");
   };
 
-  // Timer for decoy
   useEffect(() => {
     let intv: NodeJS.Timeout;
     if (decoyActive) {
@@ -391,47 +382,46 @@ export default function CallSimulator() {
     return () => clearInterval(intv);
   }, [decoyActive]);
 
-  // Filter scenarios
   const filteredScenarios = PREBAKED_SCENARIOS.filter((s) => {
     if (demographicFilter === "ALL") return true;
     return s.demographic === demographicFilter;
   });
 
   return (
-    <div id="simulator" className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-7xl mx-auto p-4">
-      {/* LEFT COLUMN: Call Control & Simulation Ingestion (5 cols) */}
-      <div className="lg:col-span-5 flex flex-col gap-5">
-        {/* Scenario Selector Panel */}
-        <div className="glass-panel rounded-2xl p-5 border border-slate-700/60 shadow-xl">
-          <div className="flex items-center justify-between mb-3">
+    <div id="simulator" className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full max-w-7xl mx-auto p-4 select-none">
+      
+      {/* LEFT COLUMN: Mission Control & In-Call Interceptor (5 cols) */}
+      <div className="lg:col-span-5 flex flex-col gap-4">
+
+        {/* Tactical Scenario Deck */}
+        <div className="glass-panel rounded-2xl p-4 border border-slate-800 shadow-xl relative overflow-hidden">
+          <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2">
-              <Radio className="w-5 h-5 text-red-400 animate-pulse" />
-              <h2 className="text-lg font-bold text-white tracking-wide">Multi-Demographic Simulator</h2>
+              <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
+              <h2 className="text-sm font-bold text-white tracking-widest uppercase">
+                Scenario Intercept Deck
+              </h2>
             </div>
-            <span className="text-[10px] bg-red-950/80 border border-red-500/40 text-red-300 px-2 py-0.5 rounded font-mono font-bold">
-              6 SCENARIOS
+            <span className="text-[9px] bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 px-2 py-0.5 rounded font-mono font-bold">
+              6 VECTORS
             </span>
           </div>
 
-          <p className="text-xs text-slate-400 mb-3">
-            Stress-test XORcall against senior extortion, student crypto/task traps, corporate executive phishing, and genuine controls.
-          </p>
-
-          {/* Demographic Filter Tabs */}
-          <div className="flex flex-wrap gap-1.5 mb-3.5">
+          {/* Demographic Filter Chips */}
+          <div className="flex flex-wrap gap-1 mb-2.5">
             {[
-              { id: "ALL", label: "All" },
-              { id: "SENIOR_CITIZEN", label: "Seniors" },
-              { id: "STUDENT_YOUTH", label: "Students" },
-              { id: "WORKING_PROFESSIONAL", label: "Techies/Execs" },
-              { id: "PARENT", label: "Parents" }
+              { id: "ALL", label: "ALL" },
+              { id: "SENIOR_CITIZEN", label: "SENIORS" },
+              { id: "STUDENT_YOUTH", label: "STUDENTS" },
+              { id: "WORKING_PROFESSIONAL", label: "TECH/EXEC" },
+              { id: "PARENT", label: "PARENTS" }
             ].map((d) => (
               <button
                 key={d.id}
                 onClick={() => setDemographicFilter(d.id)}
-                className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                className={`text-[9px] font-mono px-2 py-0.5 rounded border transition-all cursor-pointer ${
                   demographicFilter === d.id
-                    ? "bg-red-900/60 border-red-500 text-white"
+                    ? "bg-cyan-900/70 border-cyan-400 text-white shadow-sm shadow-cyan-500/30 font-bold"
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
                 }`}
               >
@@ -440,339 +430,309 @@ export default function CallSimulator() {
             ))}
           </div>
 
-          <div className="flex flex-col gap-2 mb-4 max-h-[220px] overflow-y-auto pr-1">
+          {/* Compact Scenarios List */}
+          <div className="flex flex-col gap-1.5 mb-3 max-h-[190px] overflow-y-auto pr-1">
             {filteredScenarios.map((sc) => (
               <button
                 key={sc.id}
                 disabled={isPlaying}
                 onClick={() => setActiveScenario(sc.id)}
-                className={`text-left p-2.5 rounded-xl border transition-all text-xs cursor-pointer ${
+                className={`text-left p-2 rounded-xl border transition-all text-xs cursor-pointer ${
                   activeScenario === sc.id
-                    ? "bg-red-950/40 border-red-500/80 text-red-200 shadow-md shadow-red-950/30"
-                    : "bg-slate-900/40 border-slate-800 text-slate-300 hover:border-slate-700"
+                    ? "bg-cyan-950/40 border-cyan-500/80 text-cyan-200 shadow-sm shadow-cyan-950/40"
+                    : "bg-slate-900/50 border-slate-800 text-slate-300 hover:border-slate-700"
                 }`}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="font-semibold text-xs text-white">{sc.title}</div>
-                  <span className="text-[9px] font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="font-bold text-xs text-white">{sc.title}</span>
+                  <span className="text-[8px] font-mono bg-slate-800 px-1 py-0.5 rounded text-slate-300">
                     {sc.demographicLabel}
                   </span>
                 </div>
-                <div className="text-slate-400 text-[11px] line-clamp-2">{sc.description}</div>
+                <div className="text-slate-400 font-mono text-[10px] truncate">{sc.vector}</div>
               </button>
             ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3">
+          {/* Stream Trigger Buttons */}
+          <div className="flex items-center gap-2">
             {!isPlaying ? (
               <button
                 onClick={handlePlayScenario}
-                className="flex-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-xs shadow-lg shadow-red-600/30 transition-all cursor-pointer"
+                className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer"
               >
-                <PhoneCall className="w-4 h-4" /> Start In-Call Stream
+                <PhoneCall className="w-4 h-4 animate-bounce" /> START IN-CALL STREAM
               </button>
             ) : (
               <button
                 onClick={handleStopScenario}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-red-400 font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-xs border border-red-500/30 cursor-pointer"
+                className="flex-1 bg-red-950/80 hover:bg-red-900 border border-red-500/60 text-red-200 font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs cursor-pointer transition-all"
               >
-                <PhoneOff className="w-4 h-4" /> Terminate Stream
+                <PhoneOff className="w-4 h-4" /> TERMINATE STREAM
               </button>
             )}
           </div>
         </div>
 
-        {/* MODULAR INTERVENTION SELECTOR (Answering Judge's Dislike of Haptics) */}
-        <div className="glass-panel rounded-2xl p-5 border border-indigo-500/30 shadow-xl bg-slate-950/80">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-indigo-400" /> Modular Intervention Settings
+        {/* Threat Radar 2D Display */}
+        <div className="glass-panel rounded-2xl p-3 border border-slate-800 relative">
+          <div className="flex items-center justify-between mb-1 text-[10px] font-mono">
+            <span className="text-slate-400 font-bold uppercase flex items-center gap-1.5">
+              <Radar className="w-3.5 h-3.5 text-cyan-400 animate-spin" /> 360° RF &amp; PBX Threat Radar
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">User Configurable</span>
+            <span className="text-cyan-400">BEARING: 042° AUTO</span>
           </div>
-
-          <p className="text-[11px] text-slate-400 mb-3">
-            Don&apos;t like phone vibrations? Toggle sensory channels to tailor intervention to personal or elder ergonomics.
-          </p>
-
-          <div className="space-y-2 text-xs">
-            {/* Taptic Haptics Toggle */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div className="flex items-center gap-2">
-                <Vibrate className="w-4 h-4 text-amber-400" />
-                <div>
-                  <div className="font-semibold text-slate-200 text-xs">Taptic Cheek Haptics</div>
-                  <div className="text-[10px] text-slate-400">Escalating pulse against ear when screen is dark</div>
-                </div>
-              </div>
-              <button
-                onClick={() => setInterventionConfig((p) => ({ ...p, haptics: !p.haptics }))}
-                className={`text-[10px] font-mono px-2.5 py-1 rounded cursor-pointer font-bold transition-all ${
-                  interventionConfig.haptics
-                    ? "bg-amber-500 text-black"
-                    : "bg-slate-800 text-slate-400 hover:text-white"
-                }`}
-              >
-                {interventionConfig.haptics ? "ENABLED" : "OFF (JUDGE PREF)"}
-              </button>
-            </div>
-
-            {/* In-Ear Whisper Toggle */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div className="flex items-center gap-2">
-                <Volume2 className="w-4 h-4 text-emerald-400" />
-                <div>
-                  <div className="font-semibold text-slate-200 text-xs">In-Ear Audio Whisper</div>
-                  <div className="text-[10px] text-slate-400">Synthesized voice warning into earbuds/earpiece</div>
-                </div>
-              </div>
-              <button
-                onClick={() => setInterventionConfig((p) => ({ ...p, audioWhisper: !p.audioWhisper }))}
-                className={`text-[10px] font-mono px-2.5 py-1 rounded cursor-pointer font-bold transition-all ${
-                  interventionConfig.audioWhisper
-                    ? "bg-emerald-500 text-black"
-                    : "bg-slate-800 text-slate-400 hover:text-white"
-                }`}
-              >
-                {interventionConfig.audioWhisper ? "ENABLED" : "DISABLED"}
-              </button>
-            </div>
-
-            {/* Silent Family Ping Toggle */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div className="flex items-center gap-2">
-                <BellOff className="w-4 h-4 text-indigo-400" />
-                <div>
-                  <div className="font-semibold text-slate-200 text-xs">Silent Family Out-of-Band Ping</div>
-                  <div className="text-[10px] text-slate-400">Zero phone noise; silently alerts trusted child</div>
-                </div>
-              </div>
-              <button
-                onClick={() => setInterventionConfig((p) => ({ ...p, silentFamilyPing: !p.silentFamilyPing }))}
-                className={`text-[10px] font-mono px-2.5 py-1 rounded cursor-pointer font-bold transition-all ${
-                  interventionConfig.silentFamilyPing
-                    ? "bg-indigo-500 text-black"
-                    : "bg-slate-800 text-slate-400 hover:text-white"
-                }`}
-              >
-                {interventionConfig.silentFamilyPing ? "ENABLED" : "DISABLED"}
-              </button>
-            </div>
-
-            {/* Heads-Up Banner Toggle */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <div className="flex items-center gap-2">
-                <Eye className="w-4 h-4 text-rose-400" />
-                <div>
-                  <div className="font-semibold text-slate-200 text-xs">Heads-Up Screen Warning Banner</div>
-                  <div className="text-[10px] text-slate-400">High-visibility floating overlay &amp; banking freeze</div>
-                </div>
-              </div>
-              <button
-                onClick={() => setInterventionConfig((p) => ({ ...p, headsUpBanner: !p.headsUpBanner }))}
-                className={`text-[10px] font-mono px-2.5 py-1 rounded cursor-pointer font-bold transition-all ${
-                  interventionConfig.headsUpBanner
-                    ? "bg-rose-500 text-white"
-                    : "bg-slate-800 text-slate-400 hover:text-white"
-                }`}
-              >
-                {interventionConfig.headsUpBanner ? "ENABLED" : "DISABLED"}
-              </button>
-            </div>
+          <div className="h-[180px] w-full">
+            <ThreatRadar2D threatLevel={telemetry.level} riskScore={telemetry.risk_score} />
           </div>
         </div>
 
-        {/* Taptic Sensory Shield & Proximity Haptics Card */}
-        <div className={`glass-panel rounded-2xl p-5 border transition-all ${
+        {/* Sensory Defense Monitor & Shockwave Pulse */}
+        <div className={`glass-panel rounded-2xl p-4 border transition-all relative overflow-hidden ${
           telemetry.level === "CRITICAL" && interventionConfig.haptics
-            ? "border-red-500 animate-haptic bg-red-950/30"
+            ? "border-red-500 bg-red-950/20 animate-haptic"
             : "border-slate-800"
         }`}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-400" /> Sensory Defense Monitor
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-amber-400" /> Sensory Defense &amp; Taptic Shockwave
             </span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+            <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-bold ${
               !interventionConfig.haptics 
                 ? "bg-slate-800 text-slate-400" 
                 : telemetry.level === "CRITICAL" 
-                ? "bg-red-500 text-white" 
-                : "bg-slate-800 text-slate-400"
+                ? "bg-red-500 text-white animate-pulse" 
+                : "bg-slate-800 text-cyan-300"
             }`}>
-              {!interventionConfig.haptics 
-                ? "HAPTICS OFF (WHISPER ACTIVE)" 
-                : telemetry.level === "CRITICAL" 
-                ? "ERRATIC SOS VIBRATION" 
-                : "IDLE"}
+              {!interventionConfig.haptics ? "HAPTICS: OFF" : telemetry.level === "CRITICAL" ? "SOS VIBRATION ACTIVE" : "STANDBY"}
             </span>
           </div>
 
-          <div className="w-full bg-slate-900 rounded-lg p-2.5 border border-slate-800 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Proximity Sensor:</span>
-            <span className="font-mono text-emerald-400 font-bold">NEAR_EAR (0.0 cm)</span>
-          </div>
-          {whisperPlaying && (
-            <div className="mt-2 p-2 rounded bg-emerald-950/40 border border-emerald-500/40 text-[11px] text-emerald-300 font-mono flex items-center gap-2">
-              <Volume2 className="w-3.5 h-3.5 animate-pulse" />
-              In-Ear Whisper: &ldquo;XORcall Warning: Suspected extortion call.&rdquo;
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1.5 flex-1 text-[10px] font-mono">
+              <div className="flex justify-between text-slate-400 bg-slate-900/60 p-1.5 rounded border border-slate-800">
+                <span>PROXIMITY_ADC:</span>
+                <span className="text-emerald-400 font-bold">NEAR_EAR (0.0 cm)</span>
+              </div>
+              <div className="flex justify-between text-slate-400 bg-slate-900/60 p-1.5 rounded border border-slate-800">
+                <span>IN-EAR_WHISPER:</span>
+                <span className={whisperPlaying ? "text-cyan-400 font-bold animate-pulse" : "text-slate-500"}>
+                  {whisperPlaying ? "TRANSMITTING..." : "ARMED"}
+                </span>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* KavachVision 2D-FFT Deepfake Inspector */}
-        <div className="glass-panel rounded-2xl p-5 border border-slate-800">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Video className="w-4 h-4 text-indigo-400" /> KavachVision Deepfake Inspector
-            </span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
-              fftScore > 0.6 ? "bg-rose-500 text-white" : "bg-emerald-950 text-emerald-400"
-            }`}>
-              {fftScore > 0.6 ? "SYNTHETIC_FACE_SWAP" : "OPTICAL_FEED"}
-            </span>
-          </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between text-slate-300">
-              <span>2D-FFT Periodic Lattice Score:</span>
-              <span className="font-mono font-bold text-amber-300">{fftScore.toFixed(2)}</span>
-            </div>
-            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-500 ${fftScore > 0.6 ? "bg-red-500" : "bg-emerald-500"}`} 
-                style={{ width: `${fftScore * 100}%` }}
+            {/* Concentric Shockwave Pulse Rings Visualizer */}
+            <div className="w-20 h-20 shrink-0 flex items-center justify-center">
+              <ShockwavePulseRings
+                threatLevel={telemetry.level}
+                isVibrating={telemetry.level === "CRITICAL" && interventionConfig.haptics}
+                size={76}
               />
             </div>
-            <div className="flex justify-between text-slate-400 text-[11px] pt-1">
-              <span>Collar/Jawline Seam Warping:</span>
-              <span className={seamAnomaly ? "text-red-400 font-bold" : "text-slate-500"}>
-                {seamAnomaly ? "ANOMALY DETECTED" : "NOMINAL"}
-              </span>
-            </div>
           </div>
         </div>
+
+        {/* Modular Interventions Compact Matrix */}
+        <div className="glass-panel rounded-2xl p-3.5 border border-slate-800 text-xs">
+          <div className="flex items-center justify-between mb-2 text-[10px] font-mono">
+            <span className="text-slate-400 font-bold uppercase flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-indigo-400" /> Modality Toggles
+            </span>
+            <span className="text-slate-500">JUDGE_CONFIG</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+            <button
+              onClick={() => setInterventionConfig((p) => ({ ...p, haptics: !p.haptics }))}
+              className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                interventionConfig.haptics
+                  ? "bg-amber-950/40 border-amber-500 text-amber-200"
+                  : "bg-slate-900 border-slate-800 text-slate-500"
+              }`}
+            >
+              <span className="flex items-center gap-1.5"><Vibrate className="w-3.5 h-3.5" /> Haptics</span>
+              <span>{interventionConfig.haptics ? "ON" : "OFF"}</span>
+            </button>
+
+            <button
+              onClick={() => setInterventionConfig((p) => ({ ...p, audioWhisper: !p.audioWhisper }))}
+              className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                interventionConfig.audioWhisper
+                  ? "bg-cyan-950/40 border-cyan-500 text-cyan-200"
+                  : "bg-slate-900 border-slate-800 text-slate-500"
+              }`}
+            >
+              <span className="flex items-center gap-1.5"><Volume2 className="w-3.5 h-3.5" /> Whisper</span>
+              <span>{interventionConfig.audioWhisper ? "ON" : "OFF"}</span>
+            </button>
+
+            <button
+              onClick={() => setInterventionConfig((p) => ({ ...p, silentFamilyPing: !p.silentFamilyPing }))}
+              className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                interventionConfig.silentFamilyPing
+                  ? "bg-indigo-950/40 border-indigo-500 text-indigo-200"
+                  : "bg-slate-900 border-slate-800 text-slate-500"
+              }`}
+            >
+              <span className="flex items-center gap-1.5"><BellOff className="w-3.5 h-3.5" /> Family Ping</span>
+              <span>{interventionConfig.silentFamilyPing ? "ON" : "OFF"}</span>
+            </button>
+
+            <button
+              onClick={() => setInterventionConfig((p) => ({ ...p, headsUpBanner: !p.headsUpBanner }))}
+              className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                interventionConfig.headsUpBanner
+                  ? "bg-rose-950/40 border-rose-500 text-rose-200"
+                  : "bg-slate-900 border-slate-800 text-slate-500"
+              }`}
+            >
+              <span className="flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" /> HUD Lock</span>
+              <span>{interventionConfig.headsUpBanner ? "ON" : "OFF"}</span>
+            </button>
+          </div>
+        </div>
+
       </div>
 
-      {/* RIGHT COLUMN: Live Threat Telemetry & Active Interventions (7 cols) */}
-      <div className="lg:col-span-7 flex flex-col gap-5">
-        {/* Master Threat Status Card */}
-        <div className={`glass-panel rounded-2xl p-6 border transition-all ${
+      {/* RIGHT COLUMN: 3D Hologram Shield & Live Telemetry (7 cols) */}
+      <div className="lg:col-span-7 flex flex-col gap-4">
+
+        {/* Master Threat Telemetry with Integrated 3D Hologram Shield */}
+        <div className={`glass-panel rounded-2xl p-5 border transition-all relative overflow-hidden ${
           telemetry.level === "CRITICAL"
             ? "border-red-500/80 bg-red-950/20 shadow-2xl shadow-red-950/50"
             : telemetry.level === "WARN"
             ? "border-amber-500/70 bg-amber-950/20"
             : "border-slate-800"
         }`}>
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[11px] font-mono uppercase tracking-widest text-slate-400">
-                  Targeted Demographic:
-                </span>
-                <span className="text-[10px] font-mono font-bold bg-indigo-950 border border-indigo-500/40 text-indigo-300 px-2 py-0.5 rounded">
-                  {telemetry.demographic_target || "GENERAL"}
-                </span>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+            
+            {/* 3D Hologram Particle Shield Sandbox (5 cols) */}
+            <div className="md:col-span-5 h-[240px] relative rounded-xl overflow-hidden bg-slate-950/60 border border-slate-800/80">
+              <CyberHologramShield3D
+                riskScore={telemetry.risk_score}
+                level={telemetry.level}
+                isAudioActive={isPlaying}
+              />
+            </div>
+
+            {/* Numeric Threat Telemetry (7 cols) */}
+            <div className="md:col-span-7 flex flex-col justify-between h-full gap-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1 font-mono text-[9px] uppercase tracking-widest text-slate-400">
+                    <span>TARGET_DEMOGRAPHIC:</span>
+                    <span className="bg-cyan-950 border border-cyan-500/40 text-cyan-300 px-1.5 py-0.5 rounded font-bold">
+                      {telemetry.demographic_target || "GENERAL"}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-black text-white tracking-wide">
+                    {telemetry.threat_type}
+                  </h3>
+                </div>
+
+                <div className="text-right font-mono">
+                  <div className={`text-3xl font-black ${
+                    telemetry.risk_score >= 0.8 ? "text-red-400 animate-glitch" : telemetry.risk_score >= 0.5 ? "text-amber-400" : "text-cyan-400"
+                  }`}>
+                    <AnimatedCounter target={telemetry.risk_score * 100} decimals={0} suffix="%" />
+                  </div>
+                  <div className="text-[9px] font-bold tracking-wider uppercase text-slate-400">RISK_SCORE</div>
+                </div>
               </div>
-              <h3 className="text-xl font-black text-white flex items-center gap-2">
-                {telemetry.threat_type}
-              </h3>
+
+              {/* 5-Stage Intent Kill-Chain Progress */}
+              <div>
+                <div className="flex justify-between text-[10px] text-slate-400 mb-1 font-mono">
+                  <span>KILL_CHAIN_PROGRESS</span>
+                  <span className="font-bold text-white">STAGE {telemetry.kill_chain_stage || telemetry.stage || 1} / 5</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5 h-2">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <div
+                      key={s}
+                      className={`rounded-sm transition-all duration-300 ${
+                        (telemetry.kill_chain_stage || telemetry.stage || 1) >= s
+                          ? s >= 4 ? "bg-red-500 shadow-sm shadow-red-500" : s >= 2 ? "bg-amber-500" : "bg-cyan-500"
+                          : "bg-slate-800"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="flex justify-between text-[8px] font-mono text-slate-500 mt-1">
+                  <span>1.HOOK</span>
+                  <span>2.PANIC</span>
+                  <span>3.ISOLATE</span>
+                  <span>4.PAYMENT</span>
+                  <span>5.LOCK</span>
+                </div>
+              </div>
+
+              {/* Mathematical Conjunction Micro-Readout */}
+              <div className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl text-[10px] font-mono">
+                <span className="text-cyan-400 font-bold block mb-0.5">INTENT_CONJUNCTION_VERDICT:</span>
+                <p className="text-slate-300 truncate">
+                  {telemetry.conjunction_explanation || "[STANDBY]: Awaiting live conversational stream..."}
+                </p>
+              </div>
+
+              {/* Flag Micro-Pills */}
+              <div className="flex flex-wrap gap-1">
+                {telemetry.flags.map((f) => (
+                  <span key={f} className="text-[9px] font-mono px-1.5 py-0.5 bg-red-950/60 border border-red-500/40 text-red-300 rounded">
+                    🚩 {f}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div className="text-right">
-              <span className={`text-2xl font-black font-mono ${
-                telemetry.risk_score >= 0.8 ? "text-red-400" : telemetry.risk_score >= 0.5 ? "text-amber-400" : "text-emerald-400"
-              }`}>
-                {(telemetry.risk_score * 100).toFixed(0)}%
-              </span>
-              <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400">Risk Score</div>
-            </div>
+
           </div>
 
-          {/* Social Engineering Kill-Chain Bar */}
-          <div className="mb-4">
-            <div className="flex justify-between text-[11px] text-slate-400 mb-1 font-mono">
-              <span>Multi-Modal Intent Kill-Chain</span>
-              <span>Stage {telemetry.kill_chain_stage || telemetry.stage || 1} / 5</span>
-            </div>
-            <div className="grid grid-cols-5 gap-1.5 h-2">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <div
-                  key={s}
-                  className={`rounded-sm transition-all duration-300 ${
-                    (telemetry.kill_chain_stage || telemetry.stage || 1) >= s
-                      ? s >= 4 ? "bg-red-500" : s >= 2 ? "bg-amber-500" : "bg-emerald-500"
-                      : "bg-slate-800"
-                  }`}
-                />
-              ))}
-            </div>
-            <div className="flex justify-between text-[9px] text-slate-500 mt-1">
-              <span>1. Hook</span>
-              <span>2. Crisis</span>
-              <span>3. Isolation (Gun)</span>
-              <span>4. Extortion</span>
-              <span>5. Coercion</span>
-            </div>
-          </div>
-
-          {/* Conjunction Explanation Banner */}
-          {telemetry.conjunction_explanation && (
-            <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl mb-4 text-xs">
-              <span className="font-mono text-amber-400 font-bold block mb-0.5 text-[10px] uppercase">
-                Mathematical Intent Conjunction:
-              </span>
-              <p className="text-slate-300 text-[11px] leading-relaxed">
-                {telemetry.conjunction_explanation}
-              </p>
-            </div>
-          )}
-
-          {/* Flags Badges */}
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {telemetry.flags.map((f) => (
-              <span key={f} className="text-[10px] font-mono px-2 py-0.5 bg-red-950/60 border border-red-500/40 text-red-300 rounded-md">
-                🚩 {f}
-              </span>
-            ))}
-          </div>
-
-          {/* Live Action Banner */}
+          {/* Critical Emergency Banner */}
           {telemetry.level === "CRITICAL" && interventionConfig.headsUpBanner && (
-            <div className="p-3 bg-red-900/50 border border-red-500/80 rounded-xl flex items-center justify-between mt-3 animate-in fade-in duration-300">
-              <div className="flex items-center gap-2.5">
-                <AlertTriangle className="w-5 h-5 text-red-300 animate-bounce" />
-                <span className="text-xs font-bold text-white">
-                  Active Extortion Detected. Banking apps locked. Sensory alert triggered.
+            <div className="p-2.5 bg-red-900/50 border border-red-500/80 rounded-xl flex items-center justify-between mt-3 text-xs">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-300 animate-bounce" />
+                <span className="font-mono text-[11px] font-bold text-white uppercase tracking-wider">
+                  LOCKDOWN: Active Coercion Siphon Detected · NetBanking Locked
                 </span>
               </div>
+              <span className="text-[9px] font-mono bg-red-950 px-2 py-0.5 rounded text-red-300">
+                1930 DISPATCH READY
+              </span>
             </div>
           )}
         </div>
 
-        {/* Live Rolling Transcript Feed */}
-        <div className="glass-panel rounded-2xl p-5 border border-slate-800 flex-1 min-h-[200px] flex flex-col">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Mic className="w-4 h-4 text-rose-400" /> Rolling Transcript & Intent Feed
+        {/* Live Audio Frequency Spectrum Canvas */}
+        <AudioWaveformSpectrum2D
+          isPlaying={isPlaying}
+          threatLevel={telemetry.level}
+        />
+
+        {/* Rolling Speech Transcript Feed */}
+        <div className="glass-panel rounded-2xl p-4 border border-slate-800 flex flex-col flex-1 min-h-[170px]">
+          <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-800 text-[10px] font-mono">
+            <span className="text-slate-400 font-bold uppercase flex items-center gap-1.5">
+              <Mic className="w-3.5 h-3.5 text-rose-400 animate-pulse" /> Live Intercept Stream
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">
-              On-Device Sherpa-ONNX &lt;150ms
-            </span>
+            <span className="text-slate-500">SHERPA_ONNX_168MS</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2 max-h-[190px] pr-2">
+          <div className="flex-1 overflow-y-auto space-y-1.5 max-h-[140px] pr-1 font-mono text-[11px]">
             {transcript.length === 0 ? (
-              <div className="text-slate-600 text-xs italic text-center py-8">
-                Click &ldquo;Start In-Call Stream&rdquo; to test real-time detection...
+              <div className="text-slate-600 text-center py-6 italic text-xs">
+                Awaiting conversational packets... Click &ldquo;START IN-CALL STREAM&rdquo; above.
               </div>
             ) : (
               transcript.map((t, idx) => (
                 <div
                   key={idx}
-                  className={`p-2.5 rounded-xl text-xs ${
+                  className={`p-2 rounded-lg text-xs ${
                     t.role === "decoy"
                       ? "bg-amber-950/40 border border-amber-500/40 text-amber-200"
-                      : "bg-slate-900/70 border border-slate-800 text-slate-200"
+                      : "bg-slate-900/80 border border-slate-800 text-slate-200"
                   }`}
                 >
                   <p>{t.text}</p>
@@ -782,59 +742,55 @@ export default function CallSimulator() {
           </div>
         </div>
 
-        {/* Active Counter-Attack & Decoy Controls */}
-        <div className="glass-panel rounded-2xl p-5 border border-slate-800">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Bot className="w-4 h-4 text-amber-400" /> Active Counter-Measures & Interventions
+        {/* Tactical Counter-Measures & Honeypot Controls */}
+        <div className="glass-panel rounded-2xl p-4 border border-slate-800 font-mono">
+          <div className="flex items-center justify-between mb-2.5 text-[10px]">
+            <span className="font-bold text-slate-400 uppercase flex items-center gap-1.5">
+              <Bot className="w-3.5 h-3.5 text-amber-400" /> Active Counter-Measures
             </span>
             {decoyActive && (
-              <span className="text-xs font-mono font-bold text-amber-300 animate-pulse">
-                DECOY ENGAGED · {Math.floor(secondsWasted / 60)}m {secondsWasted % 60}s WASTED
+              <span className="font-bold text-amber-300 animate-pulse">
+                RAMESH_AI_ENGAGED: {Math.floor(secondsWasted / 60)}m {secondsWasted % 60}s WASTED
               </span>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Decoy Button */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
             <button
               onClick={handleTransferToDecoy}
-              className="p-3 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/50 text-amber-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all"
+              className="p-2.5 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/50 text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all"
             >
-              <Bot className="w-4 h-4" /> Transfer to Ramesh AI
+              <Bot className="w-3.5 h-3.5" /> Transfer to Ramesh AI
             </button>
 
-            {/* Out-of-band Safe-Ping */}
             <button
               onClick={handleTriggerSafePing}
-              className="p-3 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-500/50 text-indigo-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all"
+              className="p-2.5 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-500/50 text-indigo-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all"
             >
-              <UserCheck className="w-4 h-4" /> 
-              {safePingStatus === "CONFIRMED" ? "Contact Confirmed Safe!" : "Dispatch Safe-Ping"}
+              <UserCheck className="w-3.5 h-3.5" /> 
+              {safePingStatus === "CONFIRMED" ? "Safe-Ping Verified!" : "Dispatch Safe-Ping"}
             </button>
 
-            {/* 1930 PDF Dossier */}
             <button
               onClick={handleDownloadDossier}
-              className="p-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all"
+              className="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all"
             >
-              <Download className="w-4 h-4" /> Download 1930 FIR
+              <Download className="w-3.5 h-3.5" /> Download 1930 FIR
             </button>
           </div>
 
-          {/* Harvested Mule Accounts */}
           {harvestedIocs.upi_ids.length > 0 && (
-            <div className="mt-3.5 p-3 bg-slate-900/90 rounded-xl border border-red-500/30 text-xs">
-              <span className="text-[10px] font-mono text-red-400 uppercase font-bold tracking-wider block mb-1">
-                Harvested Mule Infrastructure (Sent to 1930 Portal):
-              </span>
-              <div className="font-mono text-[11px] text-slate-300">
+            <div className="mt-2.5 p-2 bg-slate-900 rounded-lg border border-red-500/30 text-[10px]">
+              <span className="text-red-400 font-bold block mb-0.5">HARVESTED_MULE_IOCS (1930 READY):</span>
+              <div className="text-slate-300">
                 UPI: <span className="text-amber-300">{harvestedIocs.upi_ids.join(", ")}</span> | A/C: <span className="text-amber-300">{harvestedIocs.bank_accounts.join(", ")}</span>
               </div>
             </div>
           )}
         </div>
+
       </div>
+
     </div>
   );
 }
