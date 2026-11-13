@@ -79,7 +79,7 @@ export default function KatanaScrollJourney() {
       <div className="sticky top-0 h-screen w-full flex flex-col justify-between items-center py-16 px-6 overflow-hidden bg-[#0f1014] z-20">
         
         {/* Top Phase Header */}
-        <div className="z-30 text-center max-w-2xl pt-6 transition-all duration-300">
+        <div key={`header-${currentPhrase.stageNum}`} className="z-30 text-center max-w-2xl pt-6 transition-all duration-300 animate-in fade-in slide-in-from-top-2">
           <div className="text-[11px] font-mono tracking-widest uppercase font-bold text-slate-400 mb-2 flex items-center justify-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#e11d48] animate-ping" />
             <span>{currentPhrase.phase}</span>
@@ -100,7 +100,7 @@ export default function KatanaScrollJourney() {
         </div>
 
         {/* Center Quote Overlay (Pure Space Grotesk Typography, Razor-Sharp Negative Space) */}
-        <div className="z-30 text-center max-w-3xl px-6 transition-all duration-300 pb-12">
+        <div key={`quote-${currentPhrase.stageNum}`} className="z-30 text-center max-w-3xl px-6 transition-all duration-300 pb-12 animate-in fade-in slide-in-from-bottom-2">
           <p className="font-display text-xl sm:text-3xl text-slate-200 font-normal leading-relaxed italic drop-shadow-lg">
             {currentPhrase.quote}
           </p>
