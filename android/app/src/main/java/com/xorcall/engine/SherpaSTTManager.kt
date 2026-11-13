@@ -10,21 +10,23 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import java.util.Locale
-import kotlin.math.sqrt
 
 data class ThreatAnalysis(
     val isScamDetected: Boolean,
     val matchedKeywords: List<String>,
     val riskLevel: RiskLevel,
-    val warningMessage: String
+    val warningMessage: String,
+    val demographicVector: DemographicVector = DemographicVector.ALL,
+    val isSyntheticVoice: Boolean = false,
+    val syntheticConfidence: Float = 0f
 )
 
 /**
  * SherpaSTTManager
- * Dual-Engine on-device speech processor:
- * 1. Hardware acoustic RMS Voice Activity Detection (VAD) on raw PCM streams.
- * 2. Real-time Android SpeechRecognizer for continuous live spoken word extraction.
- * 3. High-speed Extortion & Coercion Keyword Spotter.
+ * Multi-Engine on-device speech processor:
+ * 1. Hardware acoustic Neural Vocoder VAD & Synthetic AI Voice Detector.
+ * 2. Multi-Demographic Lexicon Spotter (Student, Senior Citizen, Working Professional).
+ * 3. Real-time Android SpeechRecognizer for continuous live spoken word extraction.
  */
 class SherpaSTTManager(
     private val assetManager: AssetManager,
@@ -35,33 +37,15 @@ class SherpaSTTManager(
     private var isListening: Boolean = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private var silenceFramesCount: Int = 0
-    private var speechFramesCount: Int = 0
-    private var utteranceBuffer: StringBuilder = StringBuilder()
-    private val energyThreshold: Float = 0.015f
+    private val syntheticDetector = AcousticSyntheticDetector()
+    private var latestAcousticResult: AcousticAnalysisResult? = null
 
+    var activeScope: DemographicVector = DemographicVector.ALL
     var onThreatDetected: ((analysis: ThreatAnalysis, transcript: String) -> Unit)? = null
-
-    // Comprehensive Extortion & Digital Arrest Lexicon
-    val EXTORTION_KEYWORDS = listOf(
-        // Accident & Kinship Bail Pretext
-        "accident", "hospital", "doctor", "injured", "icu", "custody", "bail", "lockup",
-        "highway", "police station", "urgent help", "bail money",
-        // Digital Arrest & Fake Law Enforcement Pretext
-        "police", "cbi", "narcotics", "customs", "arrest", "warrant", "fir", "digital arrest",
-        "illegal", "parcel", "contraband", "drugs", "mdma", "passport", "crime branch", "trai",
-        "aadhaar", "sim card", "supreme court", "court order", "section 161",
-        // Financial Liquidation & Demand Vectors
-        "money", "transfer", "cash", "rupees", "lakh", "send money", "pay immediately", "deposit",
-        "bank account", "rbi", "escrow", "upi", "rtgs", "neft", "crypto", "freeze", "penalty", "safe account",
-        // Psychological Coercion & Isolation Tactics
-        "do not disconnect", "don't hang up", "stay on line", "video call", "skype", "skype call",
-        "secret", "confidential", "don't tell anyone", "raid", "urgent"
-    )
+    var onAcousticResult: ((result: AcousticAnalysisResult) -> Unit)? = null
 
     fun initialize(modelPath: String = "sherpa-onnx-streaming-zipformer-en") {
         try {
-            val list = assetManager.list("") ?: emptyArray()
             isInitialized = true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -87,7 +71,6 @@ class SherpaSTTManager(
                             override fun onEndOfSpeech() {}
 
                             override fun onError(error: Int) {
-                                // Automatically restart recognizer loop if active
                                 if (isListening) {
                                     mainHandler.postDelayed({
                                         startListeningInternal(onTranscript)
@@ -100,12 +83,11 @@ class SherpaSTTManager(
                                 val text = matches?.firstOrNull() ?: ""
                                 if (text.isNotBlank()) {
                                     onTranscript(text, true)
-                                    val analysis = analyzeText(text)
+                                    val analysis = analyzeText(text, activeScope)
                                     if (analysis.isScamDetected) {
                                         onThreatDetected?.invoke(analysis, text)
                                     }
                                 }
-                                // Keep listening continuously
                                 if (isListening) {
                                     startListeningInternal(onTranscript)
                                 }
@@ -116,7 +98,7 @@ class SherpaSTTManager(
                                 val text = matches?.firstOrNull() ?: ""
                                 if (text.isNotBlank()) {
                                     onTranscript(text, false)
-                                    val analysis = analyzeText(text)
+                                    val analysis = analyzeText(text, activeScope)
                                     if (analysis.isScamDetected) {
                                         onThreatDetected?.invoke(analysis, text)
                                     }
@@ -163,73 +145,66 @@ class SherpaSTTManager(
     }
 
     /**
-     * Scans any input text against the extortion lexicon.
+     * Evaluates text using DemographicThreatLexicon and current AI synthetic voice status.
      */
-    fun analyzeText(text: String): ThreatAnalysis {
-        val lower = text.lowercase(Locale.ROOT)
-        val matched = EXTORTION_KEYWORDS.filter { keyword ->
-            lower.contains(keyword)
+    fun analyzeText(text: String, scope: DemographicVector = activeScope): ThreatAnalysis {
+        val result = DemographicThreatLexicon.evaluate(text, scope)
+        val isAiVoice = latestAcousticResult?.isSyntheticVoice ?: false
+        val aiConfidence = latestAcousticResult?.syntheticConfidence ?: 0f
+
+        val effectiveRisk = if (isAiVoice && result.riskLevel == RiskLevel.SAFE) {
+            RiskLevel.WARN
+        } else if (isAiVoice && result.riskLevel == RiskLevel.WARN) {
+            RiskLevel.CRITICAL
+        } else {
+            result.riskLevel
         }
 
-        val risk = when {
-            matched.size >= 2 || matched.any { it in listOf("accident", "digital arrest", "rbi", "escrow", "bail", "narcotics", "transfer") } -> {
-                RiskLevel.CRITICAL
-            }
-            matched.isNotEmpty() -> RiskLevel.WARN
-            else -> RiskLevel.SAFE
-        }
-
-        val warning = when (risk) {
-            RiskLevel.CRITICAL -> "🚨 CRITICAL SCAM DETECTED: Extortion keywords ('${matched.joinToString(", ")}') spotted on line. HANG UP IMMEDIATELY!"
-            RiskLevel.WARN -> "⚠️ CAUTION: High-pressure keywords ('${matched.joinToString(", ")}') detected."
-            RiskLevel.SAFE -> "Line normal."
-            else -> "Line normal."
+        val enrichedMessage = if (isAiVoice) {
+            "${result.threatSummary} [AI SYNTHETIC VOICE CONFIRMED]"
+        } else {
+            result.threatSummary
         }
 
         return ThreatAnalysis(
-            isScamDetected = risk != RiskLevel.SAFE,
-            matchedKeywords = matched,
-            riskLevel = risk,
-            warningMessage = warning
+            isScamDetected = effectiveRisk != RiskLevel.SAFE,
+            matchedKeywords = result.matchedKeywords,
+            riskLevel = effectiveRisk,
+            warningMessage = enrichedMessage,
+            demographicVector = result.matchedVector,
+            isSyntheticVoice = isAiVoice,
+            syntheticConfidence = aiConfidence
         )
     }
 
     /**
-     * Processes PCM float audio buffer from hardware AudioRecord.
+     * Processes PCM float audio buffer from hardware for acoustic vocoder & voice clone detection.
      */
     fun acceptAudioChunk(samples: FloatArray, onTranscript: (text: String, isEndpoint: Boolean) -> Unit) {
         if (samples.isEmpty()) return
 
-        var sumSquares = 0.0
-        for (sample in samples) {
-            sumSquares += sample * sample
-        }
-        val rms = sqrt(sumSquares / samples.size).toFloat()
+        val acousticResult = syntheticDetector.analyzeAudioChunk(samples)
+        latestAcousticResult = acousticResult
+        onAcousticResult?.invoke(acousticResult)
 
-        if (rms > energyThreshold) {
-            speechFramesCount++
-            silenceFramesCount = 0
-
-            if (speechFramesCount == 10) {
-                val sampleScam = "Accident on highway! Need emergency transfer of 50,000 rupees to police for bail now."
-                onTranscript(sampleScam, false)
-                val analysis = analyzeText(sampleScam)
-                onThreatDetected?.invoke(analysis, sampleScam)
-            }
-        } else {
-            silenceFramesCount++
-            if (speechFramesCount >= 8 && silenceFramesCount >= 4) {
-                speechFramesCount = 0
-                silenceFramesCount = 0
-            }
+        if (acousticResult.isSyntheticVoice) {
+            val alertText = "Synthetic neural vocoder clone speaking on line."
+            val analysis = ThreatAnalysis(
+                isScamDetected = true,
+                matchedKeywords = listOf("AI_VOICE_CLONE"),
+                riskLevel = RiskLevel.CRITICAL,
+                warningMessage = "🚨 CRITICAL: AI-GENERATED SYNTHETIC VOICE DETECTED ON CALL! Voice is not human.",
+                demographicVector = activeScope,
+                isSyntheticVoice = true,
+                syntheticConfidence = acousticResult.syntheticConfidence
+            )
+            onThreatDetected?.invoke(analysis, alertText)
         }
     }
 
     fun release() {
         stopContinuousListening()
-        utteranceBuffer.clear()
+        syntheticDetector.reset()
         isInitialized = false
-        speechFramesCount = 0
-        silenceFramesCount = 0
     }
 }

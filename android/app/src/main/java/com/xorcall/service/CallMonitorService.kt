@@ -14,9 +14,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.xorcall.engine.RiskLevel
-import com.xorcall.engine.SherpaSTTManager
-import com.xorcall.engine.TapticHapticEngine
+import com.xorcall.engine.*
 import com.xorcall.network.TelemetryListener
 import com.xorcall.network.TelemetryWebSocketClient
 import com.xorcall.ui.FloatingAlertOverlay
@@ -25,10 +23,11 @@ import org.json.JSONObject
 
 /**
  * CallMonitorService
- * Autonomous Foreground Guardian Service.
- * Listens for extortion & Digital Arrest speech patterns via on-device SherpaSTTManager,
- * fires escalating Taptic sensory shockwave pulses against cheek/ear via Proximity Sensor,
- * and mounts Heads-Up floating banner overlays over incoming phone / WhatsApp calls.
+ * Autonomous Foreground Guardian Service with:
+ * - Multi-Demographic Lexicon Interception (Student, Senior Citizen, Working Professional)
+ * - Acoustic Neural Vocoder & AI Synthetic Voice Clone Spotter
+ * - Proximity-aware sensory Taptic Haptics shockwave
+ * - Persistent BSA Section 63 forensic logging
  */
 class CallMonitorService : Service(), TelemetryListener {
 
@@ -39,7 +38,12 @@ class CallMonitorService : Service(), TelemetryListener {
     private lateinit var sttManager: SherpaSTTManager
     private lateinit var floatingOverlay: FloatingAlertOverlay
     private lateinit var packageWatchdog: PackageWatchdog
+    private lateinit var callHistoryManager: CallHistoryManager
     private var webSocketClient: TelemetryWebSocketClient? = null
+
+    private var currentCallerNumber: String = "Unknown Number"
+    private var currentCallerClassification: String = "UNKNOWN"
+    private var activeDemographicVector: DemographicVector = DemographicVector.ALL
 
     private var audioRecord: AudioRecord? = null
     private var isRecording = false
@@ -56,27 +60,56 @@ class CallMonitorService : Service(), TelemetryListener {
             hapticEngine = TapticHapticEngine(this)
             hapticEngine.startListening()
 
+            callHistoryManager = CallHistoryManager(this)
+
             sttManager = SherpaSTTManager(assets, this)
             sttManager.initialize()
+            sttManager.activeScope = activeDemographicVector
 
             sttManager.onThreatDetected = { analysis, transcript ->
-                // 1. Fire hardware sensory shockwave haptics
+                // 1. Hardware Sensory Shockwave
                 hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
 
-                // 2. Display intrusive floating alert overlay & Heads-Up Notification
+                // 2. High-Priority Heads-Up & Floating Alert
                 scope.launch(Dispatchers.Main) {
                     floatingOverlay.showCriticalAlert(analysis.warningMessage)
                 }
 
-                // 3. Broadcast to MainActivity
+                // 3. Log to BSA Sec 63 Forensic Vault
+                callHistoryManager.recordCall(
+                    callerNumber = currentCallerNumber,
+                    callerClassification = currentCallerClassification,
+                    vector = analysis.demographicVector,
+                    risk = analysis.riskLevel,
+                    isSynthetic = analysis.isSyntheticVoice,
+                    syntheticConfidence = analysis.syntheticConfidence,
+                    keywords = analysis.matchedKeywords,
+                    transcript = transcript
+                )
+
+                // 4. System Broadcast
                 val intent = Intent("com.xorcall.THREAT_ALERT").apply {
                     putExtra("level", analysis.riskLevel.name)
                     putExtra("message", analysis.warningMessage)
                     putExtra("transcript", transcript)
+                    putExtra("vector", analysis.demographicVector.name)
+                    putExtra("isSynthetic", analysis.isSyntheticVoice)
+                    putExtra("syntheticConfidence", analysis.syntheticConfidence)
                     putExtra("keywords", analysis.matchedKeywords.toTypedArray())
                     setPackage(packageName)
                 }
                 sendBroadcast(intent)
+            }
+
+            sttManager.onAcousticResult = { result ->
+                if (result.isSyntheticVoice) {
+                    val aiIntent = Intent("com.xorcall.AI_VOICE_ALERT").apply {
+                        putExtra("confidence", result.syntheticConfidence)
+                        putExtra("reason", result.analysisReason)
+                        setPackage(packageName)
+                    }
+                    sendBroadcast(aiIntent)
+                }
             }
 
             floatingOverlay = FloatingAlertOverlay(this)
@@ -90,7 +123,7 @@ class CallMonitorService : Service(), TelemetryListener {
             }
 
             createNotificationChannel()
-            val notification = buildForegroundNotification("Kavach Shield Active - Real-Time Interception Armed")
+            val notification = buildForegroundNotification("Kavach Shield Active - Intercepting Extortion Scripts")
             
             val hasMicPermission = ContextCompat.checkSelfPermission(
                 this,
@@ -121,13 +154,27 @@ class CallMonitorService : Service(), TelemetryListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        intent?.getStringExtra("EXTRA_INCOMING_NUMBER")?.let {
+            currentCallerNumber = it
+        }
+        intent?.getStringExtra("EXTRA_CLASSIFICATION")?.let {
+            currentCallerClassification = it
+        }
+        intent?.getStringExtra("EXTRA_VECTOR_SCOPE")?.let { scopeName ->
+            try {
+                activeDemographicVector = DemographicVector.valueOf(scopeName)
+                sttManager.activeScope = activeDemographicVector
+            } catch (_: Exception) {}
+        }
+
         val testText = intent?.getStringExtra("EXTRA_TEST_TEXT")
         if (!testText.isNullOrBlank()) {
-            val analysis = sttManager.analyzeText(testText)
+            val analysis = sttManager.analyzeText(testText, activeDemographicVector)
             if (analysis.isScamDetected) {
                 sttManager.onThreatDetected?.invoke(analysis, testText)
             }
         }
+
         return START_STICKY
     }
 
@@ -139,7 +186,6 @@ class CallMonitorService : Service(), TelemetryListener {
         if (!hasMicPermission) return
 
         try {
-            // Continuous speech recognizer for live conversational extraction
             sttManager.startContinuousListening { text, isEndpoint ->
                 if (text.isNotBlank()) {
                     val intent = Intent("com.xorcall.TRANSCRIPT_UPDATE").apply {

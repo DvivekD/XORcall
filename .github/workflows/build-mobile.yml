@@ -39,27 +39,27 @@ jobs:
       - name: Copy & Rename APK
         run: |
           mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.2-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.3-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.0.2-debug.apk
+          path: build-artifacts/XORcall-v1.0.3-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.2-apk
-          name: "XORcall v1.0.2 Android APK (Live Speech & Threat Haptics Interceptor)"
+          tag_name: v1.0.3-apk
+          name: "XORcall v1.0.3 Android APK (Multi-Demographic Threat Vectors & AI Voice Detection)"
           body: |
-            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.2
-            - Real-time on-device speech & extortion threat interceptor.
-            - High-intensity sensory Taptic Haptics shockwave on threat detection.
-            - Heads-Up floating banner & priority system notification over incoming calls.
-            - Live voice microphone spotter for "accident", "police", "arrest", "money transfer", and "bail" keywords.
-            - Full compatibility with Vivo V25 Pro (Android 14 / FuntouchOS).
-            - 1-Click 1930 Cybercrime Helpline Speed Dial.
-          files: build-artifacts/XORcall-v1.0.2-debug.apk
+            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.3
+            - Multi-Demographic Threat Lexicon: Student (Telegram tasks/fees), Senior (Digital Arrest/FD liquidation), Corporate Professional (FedEx/TRAI/Customs).
+            - Neural Acoustic AI Synthetic Voice Clone Detector (8kHz vocoder roll-off & jitter anomaly).
+            - Smart Whitelisting: Auto-allows verified bank toll-free lines (1800 SBI, HDFC, ICICI) and emergency numbers (112, 100, 1930).
+            - Mandatory monitoring strictly on unknown callers and high-risk international numbers (+92, +880, +234, +855).
+            - Forensic Call Vault with 1-click BSA Section 63 compliant 1930 dossier generator and SHA-256 integrity proofs.
+            - Vivo V25 Pro / Android 14 full compatibility.
+          files: build-artifacts/XORcall-v1.0.3-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
