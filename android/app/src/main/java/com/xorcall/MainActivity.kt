@@ -184,8 +184,26 @@ fun MainScreen(
         callRecords.addAll(historyManager.getAllRecords())
     }
 
+    val coroutineScope = rememberCoroutineScope()
+    var isVoskReady by remember { mutableStateOf(sttManager.isVoskReady) }
+    var isDownloadingModel by remember { mutableStateOf(sttManager.isDownloading) }
+    var modelDownloadProgress by remember { mutableStateOf(sttManager.downloadProgress) }
+
+    DisposableEffect(sttManager) {
+        sttManager.onModelReady = {
+            isVoskReady = true
+            isDownloadingModel = false
+        }
+        sttManager.onModelDownloadProgress = { progress ->
+            isDownloadingModel = true
+            modelDownloadProgress = progress
+        }
+        onDispose { }
+    }
+
     LaunchedEffect(Unit) {
         refreshHistory()
+        sttManager.initializeVosk(this)
     }
 
     fun triggerThreatExecution(phrase: String, callerId: String = "Test Caller", vector: DemographicVector = activeVector) {
@@ -242,7 +260,7 @@ fun MainScreen(
         }
     }
 
-    // Always-On Continuous Live Transcription when Shield is active
+    // Always-On Continuous Live Transcription when Shield is active (Vosk on-device STT)
     LaunchedEffect(isShieldActive, activeVector) {
         if (isShieldActive) {
             val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -250,28 +268,6 @@ fun MainScreen(
                 sttManager.startAlwaysOnLiveListening { text, _ ->
                     if (text.isNotBlank()) {
                         liveTranscript = "“$text”"
-                        val analysis = sttManager.analyzeText(text, activeVector)
-                        if (analysis.isScamDetected) {
-                            riskLevel = analysis.riskLevel
-                            lastThreatMessage = analysis.warningMessage
-                            if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
-                            if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
-                            if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
-                            if (isFamilyPingEnabled) {
-                                guardianPingManager.sendSilentGuardianPing("Live Spoken Words", analysis.warningMessage, analysis.demographicVector)
-                            }
-                            historyManager.recordCall(
-                                callerNumber = "Live Spoken Words",
-                                callerClassification = "SPOKEN_WORDS",
-                                vector = analysis.demographicVector,
-                                risk = analysis.riskLevel,
-                                isSynthetic = analysis.isSyntheticVoice,
-                                syntheticConfidence = analysis.syntheticConfidence,
-                                keywords = analysis.matchedKeywords,
-                                transcript = text
-                            )
-                            refreshHistory()
-                        }
                     }
                 }
             }
@@ -394,6 +390,18 @@ fun MainScreen(
         ) {
             item {
                 HeaderSection()
+            }
+
+            // ON-DEVICE VOSK SPEECH ENGINE STATUS & DOWNLOAD CARD
+            item {
+                ModelStatusCard(
+                    isReady = isVoskReady,
+                    isDownloading = isDownloadingModel,
+                    progress = modelDownloadProgress,
+                    onDownloadClick = {
+                        sttManager.initializeVosk(coroutineScope)
+                    }
+                )
             }
 
             // DIRECT ACCESSIBILITY AUDIO INTERCEPTOR CARD
@@ -1179,7 +1187,7 @@ fun HeaderSection() {
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Text(
-                text = "v1.0.6-PROD",
+                text = "v1.0.7-PROD",
                 color = Color(0xFF94A3B8),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace
@@ -1418,6 +1426,77 @@ fun BottomSpeedDialBar(onDial1930: () -> Unit) {
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text("SPEED DIAL 1930", fontWeight = FontWeight.Black, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun ModelStatusCard(
+    isReady: Boolean,
+    isDownloading: Boolean,
+    progress: Float,
+    onDownloadClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isReady) Color(0xFF064E3B) else Color(0xFF1E1B4B))
+            .border(1.dp, if (isReady) Color(0xFF059669) else Color(0xFF6366F1), RoundedCornerShape(10.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Text(if (isReady) "🧠" else "⏳", fontSize = 18.sp)
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = if (isReady) "ON-DEVICE SPEECH ENGINE (VOSK): READY" else "ON-DEVICE SPEECH ENGINE (OFFLINE)",
+                    color = if (isReady) Color(0xFF6EE7B7) else Color(0xFFA5B4FC),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                if (isDownloading) {
+                    Text(
+                        text = "Downloading offline model (~40MB)... ${(progress * 100).toInt()}%",
+                        color = Color.White,
+                        fontSize = 9.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                        color = Color(0xFF34D399),
+                        trackColor = Color(0xFF1F2937)
+                    )
+                } else if (isReady) {
+                    Text(
+                        text = "100% On-device offline inference active. Works during phone calls.",
+                        color = Color.White,
+                        fontSize = 9.sp
+                    )
+                } else {
+                    Text(
+                        text = "Tap to initialize offline speech recognition model.",
+                        color = Color.White,
+                        fontSize = 9.sp
+                    )
+                }
+            }
+        }
+        if (!isReady && !isDownloading) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onDownloadClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text("Get Model", fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

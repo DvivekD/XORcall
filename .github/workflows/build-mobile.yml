@@ -39,26 +39,26 @@ jobs:
       - name: Copy & Rename APK
         run: |
           mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.6-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.7-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.0.6-debug.apk
+          path: build-artifacts/XORcall-v1.0.7-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.6-apk
-          name: "XORcall v1.0.6 Android APK (Always-On Live Speech Transcriber, Kidnap & 5 Lakhs Death Threat Interceptor)"
+          tag_name: v1.0.7-apk
+          name: "XORcall v1.0.7 Android APK (Vosk On-Device STT — Offline In-Call Live Transcriber & Extortion Interceptor)"
           body: |
-            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.6
-            - **Always-On Live Speech Transcriber**: Live speech recognition activates automatically as soon as the Shield is turned ON. Words appear live in the transcript box in real time.
-            - **Expanded Kidnap & Death Threat Lexicon**: Explicit instant triggers for `"kill"`, `"killing"`, `"murder"`, `"son"`, `"daughter"`, `"hostage"`, `"kidnap"`, `"5 lakhs"`, and `"5 million dollar extraction"`.
-            - **Immediate Sensory Alert Chain**: Fires Cheek Haptic Shockwave, High-Priority Heads-Up Warning Banner, In-Ear Audio Whisper (TTS), and Silent Guardian Ping on the very first detected threat phrase.
-            - **1-Tap Roleplay Quick Button**: Added dedicated `Kidnap: 5L & Son` test button alongside `5M $ Extort`, Student, Senior, and Pro vectors.
-            - **Vivo V25 Pro / Android 14 Verified Compatibility**.
-          files: build-artifacts/XORcall-v1.0.6-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.0.7
+            - **Vosk True On-Device STT Engine**: Replaced Google SpeechRecognizer IPC with a fully offline on-device Vosk engine. Works seamlessly DURING active telephony phone calls without being blocked by Android 14 / Vivo FuntouchOS audio policies.
+            - **Direct PCM Audio Line Ingestion**: Directly feeds raw 16kHz PCM from `AudioRecord(VOICE_COMMUNICATION)` into Vosk for live transcription without distortion.
+            - **Live Word Streaming**: Streams live partial & final transcribed words directly onto the UI transcript card and triggers alerts in real time.
+            - **Instant Sensory Interventions**: Immediately fires Cheek Haptics Shockwave, In-Ear Audio Whisper (TTS), Heads-Up Alert Banner, and Silent Guardian Ping on threat keywords (`kill`, `son`, `5 lakhs`, `kidnap`, etc.).
+            - **BSA Section 63 Digital Evidence Vault**: Logs all intercepted calls with SHA-256 cryptographic forensic hashes for instant 1930 / I4C cybercrime filing.
+          files: build-artifacts/XORcall-v1.0.7-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

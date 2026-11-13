@@ -12,12 +12,12 @@ android {
         applicationId = "com.xorcall"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8
+        versionName = "1.0.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a"))
+            abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86"))
         }
     }
 
@@ -52,4 +52,8 @@ dependencies {
     // Coroutines & Network WebSockets
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // On-Device Vosk Speech-to-Text & JNA Native Access
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
+    implementation("com.alphacephei:vosk-android:0.3.75@aar")
 }

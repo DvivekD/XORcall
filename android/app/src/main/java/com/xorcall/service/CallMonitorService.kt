@@ -91,6 +91,7 @@ class CallMonitorService : Service(), TelemetryListener {
 
             sttManager = SherpaSTTManager(assets, this)
             sttManager.initialize()
+            sttManager.initializeVosk(scope)
             sttManager.activeScope = settingsManager.activeVector
 
             sttManager.onThreatDetected = { analysis, transcript ->
@@ -300,6 +301,9 @@ class CallMonitorService : Service(), TelemetryListener {
                     while (isRecording && isActive) {
                         val readCount = audioRecord?.read(pcmBuffer, 0, pcmBuffer.size) ?: 0
                         if (readCount > 0) {
+                            // Feed RAW PCM ShortArray directly to on-device Vosk STT + Acoustic AI Voice engine
+                            sttManager.acceptAudioChunkRaw(pcmBuffer, readCount)
+
                             // Measure incoming RMS energy
                             var sumSquares = 0.0
                             for (i in 0 until readCount) {
@@ -307,17 +311,6 @@ class CallMonitorService : Service(), TelemetryListener {
                                 sumSquares += s * s
                             }
                             val rms = sqrt(sumSquares / readCount) / 32768.0
-
-                            // Adaptive Digital Gain: Boost earpiece downlink audio (+20dB ~ 10x gain)
-                            // Apply hyperbolic tangent (tanh) soft limiter to prevent digital clipping
-                            val boostedFloatSamples = FloatArray(readCount) { idx ->
-                                val normalized = pcmBuffer[idx] / 32768.0f
-                                val boosted = normalized * 10.0f
-                                tanh(boosted.toDouble()).toFloat()
-                            }
-
-                            // Feed directly to In-Process Acoustic & Neural Vocoder Engine
-                            sttManager.acceptAudioChunk(boostedFloatSamples)
 
                             // If voice activity is sustained, broadcast live audio level to UI
                             if (rms > 0.015) {
