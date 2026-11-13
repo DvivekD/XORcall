@@ -5,20 +5,22 @@
 - **Team**: KANYARASI (Likhith Venkata Sai, Shruthishree Mohapatra)
 - **Premise**: Real-time on-device/hybrid AI cyber defense system against "Digital Arrest" scams and "Family AI Video/Voice Clones" in India.
 - **Architectural Decisions (Locked via /grill-me)**:
-  1. *Mobile*: Kotlin + Jetpack Compose Native Android client (Proximity Haptics, Sherpa-ONNX streaming STT, Shizuku shell capture, Package Watchdog) + PWA for iOS companion.
-  2. *Web*: Next.js 15 (Tailwind CSS v4) with dual-mode (Judge Call & Deepfake Simulator + Guardian Command Center).
-  3. *Backend*: FastAPI + Groq LPU (Llama 3.3 70B @ <200ms) + OpenCV 2D-FFT Deepfake Inspector + ReportLab 1930 Dossier Generator.
+  1. *Mobile*: Kotlin + Jetpack Compose Native Android client (`v1.0.2` Live on GitHub Releases: `XORcall-v1.0.2-debug.apk`). Features Proximity Haptics, Sherpa-ONNX streaming STT, Shizuku shell capture, Package Watchdog, and Live Microphone Voice Spotter.
+  2. *Web*: Next.js 16 + React 19 + Three.js with StringTune 3D Katana (`katana.glb`), NIST 5-Phase Octet Medallion (`IDENTIFY` -> `RECOVER`), Space Grotesk typography, and "Defend With Clarity" light bone theme.
+  3. *Backend*: FastAPI + Groq LPU (Llama 3.3 70B @ <200ms) + OpenCV 2D-FFT Deepfake Inspector + ReportLab 1930 Dossier Generator (All 15 unit tests passing).
   4. *Counter-Measure*: "Kavach AI Decoy" (Ramesh Gupta persona) with time-wasted tracker and mule account extractor.
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
-- **Key Defensive Innovations**:
-  - Taptic Haptic Sensor Shield (escalating vibration patterns against ear/hand via Proximity Sensor).
-  - Multi-Vector Voice Clone Detector (acoustic spectral entropy + phase incoherence).
-  - Out-of-Band Family Safe-Ping & Zero-Trust Safe-Word Challenge.
-  - Video Deepfake & Insignia Inspector (2D-FFT spectral artifacts + collar seam warping).
-  - 1930 / I4C CFCFRMS Golden Hour Auto-Dossier Generator.
-  - Passive Proof-of-Life Telemetry & Multi-Hop Escalation Tree (solves unresponsive family member edge case).
-  - Multilingual Indic Engine (AI4Bharat / Bhashini / Groq Llama 3.3 for Hindi, Kannada, Tamil, Telugu, Hinglish).
-  - Remote Desktop & AnyDesk/RustDesk Trojan Blocker.
+## Key Defensive Innovations & Milestones
+- **Taptic Haptic Sensor Shield**: Escalating vibration shockwave patterns against ear/hand via Proximity Sensor with `hasAmplitudeControl()` defensive fallbacks for Vivo V25 Pro / FuntouchOS.
+- **On-Device Real-Time Speech Lexicon (`SherpaSTTManager`)**: 50+ extortion keywords across kinship accident, hospital, police custody, bail, CBI, narcotics, digital arrest, and RBI escrow.
+- **Incoming Phone State Receiver (`PhoneCallReceiver`)**: Automatically invokes `CallMonitorService` upon `EXTRA_STATE_RINGING` or `EXTRA_STATE_OFFHOOK`.
+- **Heads-Up Floating Alert Banner & Urgent Notification (`FloatingAlertOverlay`)**: Dual-layer alert system with `PRIORITY_MAX` alarm notification + floating window over dialer with 1-click 1930 speed dial.
+- **StringTune 3D Katana (`CyberKatana3D.tsx`)**: Exact video alignment with handle top-right (+22°), scabbard bottom-left, gold Habaki `( べ )` centered, and smooth unsheathing kinematics.
+- **NIST 5-Phase Octet Medallion (`CyberOctagonMedallion.tsx`)**: High-DPI SVG regular octagon cycling through the 5 defense stages.
+- **Light Theme Transition (`#e2dde3`)**: Replicates "Defend With Clarity", centered `( べ )`, and 4-column numbered breakdown.
 
-
+## 3 Judge Critiques Tackled
+1. *False Positives (Legitimate vs Scam)*: Mathematical Intent Conjunction Rule + Benign Mitigators (physical hospital presence `-0.40`, institutional ERP `-0.35`). Real emergencies demand physical presence; scams enforce isolation and unverified digital wire transfers.
+2. *Multi-Demographic Scope*: Expanded beyond seniors to college students (Telegram task/fee fraud), working professionals (CEO whaling), and parents (voice clones).
+3. *Modular Sensory Defense*: Customizable alerts (Taptic Cheek Haptics, In-Ear Audio Whisper TTS, Heads-Up Screen Overlay, Silent Family Safe-Ping) for vibration-averse users.
