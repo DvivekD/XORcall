@@ -12,6 +12,7 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **Vosk True On-Device Speech Recognition Engine (`v1.0.7`)**: Solved Android 14 / Vivo FuntouchOS in-call mic blocking by replacing Google SpeechRecognizer IPC with offline Vosk STT. Raw 16kHz PCM from `AudioRecord(VOICE_COMMUNICATION)` feeds directly into Vosk for real-time speech-to-text during live phone calls.
 - **Taptic Haptic Sensor Shield**: Escalating vibration shockwave patterns against ear/hand via Proximity Sensor with `hasAmplitudeControl()` defensive fallbacks for Vivo V25 Pro / FuntouchOS.
 - **On-Device Real-Time Speech Lexicon (`SherpaSTTManager`)**: 50+ extortion keywords across kinship accident, hospital, police custody, bail, CBI, narcotics, digital arrest, and RBI escrow.
 - **Incoming Phone State Receiver (`PhoneCallReceiver`)**: Automatically invokes `CallMonitorService` upon `EXTRA_STATE_RINGING` or `EXTRA_STATE_OFFHOOK`.
