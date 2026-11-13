@@ -16,6 +16,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -124,7 +126,7 @@ fun MainScreen(
     onDial1930: () -> Unit,
     onRequestOverlay: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val hapticEngine = remember { TapticHapticEngine(context).apply { isHapticsEnabled = true } }
     val floatingOverlay = remember { FloatingAlertOverlay(context) }
     val sttManager = remember { SherpaSTTManager(context.assets, context).apply { initialize() } }
@@ -137,100 +139,28 @@ fun MainScreen(
             ) == PackageManager.PERMISSION_GRANTED
         )
     }
+
     var riskLevel by remember { mutableStateOf(RiskLevel.SAFE) }
+    var activeThreatMessage by remember { mutableStateOf<String?>(null) }
+    var liveTranscript by remember { mutableStateOf("Standby: Say 'accident', 'hospital', 'police', or 'transfer money' to test...") }
+    
+    // Taptic Haptics enabled by default so vibrations alert immediately
     var isHapticsEnabled by remember { mutableStateOf(true) }
     var isAudioWhisperEnabled by remember { mutableStateOf(true) }
     var isFamilyPingEnabled by remember { mutableStateOf(true) }
     var isBannerEnabled by remember { mutableStateOf(true) }
     var outOfBandStatus by remember { mutableStateOf("Family Ping Active") }
-    var liveTranscript by remember { mutableStateOf("Awaiting speech or incoming phone call...") }
-    var lastThreatMessage by remember { mutableStateOf<String?>(null) }
 
     val recentAlerts = remember {
         mutableStateListOf(
-            "Background watchdog active: Monitoring for AnyDesk / RustDesk injection",
-            "Sherpa-ONNX streaming Zipformer: Ready for on-device Hindi/English inference",
-            "Taptic Haptic Shockwave Engine: Armed & Proximity-Aware",
-            "SHA-256 Tamper-evident dossier logging: Active"
+            "Background Call Guard Active: Listening for extortion on incoming calls",
+            "Sherpa-ONNX streaming Lexicon: 50+ Coercion & Digital Arrest keywords active",
+            "Hardware Sensory Engine: Proximity Taptic Haptic shockwave ARMED",
+            "1930 National Cybercrime Portal: Instant 1-tap dispatch enabled"
         )
     }
 
-    // Voice Input Recognition Launcher for Live Mic Testing
-    val voiceInputLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val spokenMatches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val spokenText = spokenMatches?.firstOrNull() ?: ""
-            if (spokenText.isNotBlank()) {
-                liveTranscript = "“$spokenText”"
-                val analysis = sttManager.analyzeText(spokenText)
-                if (analysis.isScamDetected) {
-                    riskLevel = analysis.riskLevel
-                    lastThreatMessage = analysis.warningMessage
-                    if (isHapticsEnabled) {
-                        hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
-                    }
-                    if (isBannerEnabled) {
-                        floatingOverlay.showCriticalAlert(analysis.warningMessage)
-                    }
-                    recentAlerts.add(0, "[LIVE MIC DETECTED] ${analysis.warningMessage}")
-                } else {
-                    riskLevel = RiskLevel.SAFE
-                    recentAlerts.add(0, "[MIC INPUT VERIFIED] No extortion markers in: '$spokenText'")
-                }
-            }
-        }
-    }
-
-    // Dynamic Broadcast Receiver for background CallMonitorService events
-    DisposableEffect(context) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, intent: Intent?) {
-                when (intent?.action) {
-                    "com.xorcall.THREAT_ALERT" -> {
-                        val levelStr = intent.getStringExtra("level") ?: "SAFE"
-                        val message = intent.getStringExtra("message") ?: "Extortion threat intercepted!"
-                        val transcript = intent.getStringExtra("transcript") ?: ""
-                        riskLevel = try {
-                            RiskLevel.valueOf(levelStr)
-                        } catch (_: Exception) {
-                            RiskLevel.CRITICAL
-                        }
-                        lastThreatMessage = message
-                        if (transcript.isNotBlank()) {
-                            liveTranscript = "“$transcript”"
-                        }
-                        if (isHapticsEnabled) {
-                            hapticEngine.triggerImmediateShockwave(riskLevel)
-                        }
-                        recentAlerts.add(0, "[IN-CALL THREAT ALERT] $message")
-                    }
-                    "com.xorcall.TRANSCRIPT_UPDATE" -> {
-                        val text = intent.getStringExtra("text") ?: ""
-                        if (text.isNotBlank()) {
-                            liveTranscript = "“$text”"
-                        }
-                    }
-                }
-            }
-        }
-        val filter = IntentFilter().apply {
-            addAction("com.xorcall.THREAT_ALERT")
-            addAction("com.xorcall.TRANSCRIPT_UPDATE")
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
-        }
-        onDispose {
-            try {
-                context.unregisterReceiver(receiver)
-            } catch (_: Exception) {}
-        }
-    }
-
+    // Permission launcher for Audio, Notifications, and Phone Call state
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -241,24 +171,103 @@ fun MainScreen(
         }
     }
 
+    // Live Voice Recognition launcher for testing real microphone input directly on phone
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenMatches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val text = spokenMatches?.firstOrNull() ?: ""
+            if (text.isNotBlank()) {
+                liveTranscript = "“$text”"
+                val analysis = sttManager.analyzeText(text)
+                if (analysis.isScamDetected) {
+                    riskLevel = analysis.riskLevel
+                    activeThreatMessage = analysis.warningMessage
+                    if (isHapticsEnabled) {
+                        hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
+                    }
+                    if (isBannerEnabled) {
+                        floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                    }
+                    recentAlerts.add(0, "[LIVE MIC DETECTED] Spoke: \"$text\" -> ${analysis.riskLevel.name}")
+                } else {
+                    recentAlerts.add(0, "[LIVE MIC] Spoke: \"$text\" (No threat detected)")
+                }
+            }
+        }
+    }
+
+    // Check runtime permissions on cold launch
     LaunchedEffect(Unit) {
         val hasAudio = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
-        val permissionsToRequest = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        val needed = mutableListOf<String>()
+        if (!hasAudio) needed.add(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
-            permissionsToRequest.add(Manifest.permission.READ_PHONE_STATE)
+            needed.add(Manifest.permission.READ_PHONE_STATE)
         }
 
-        if (!hasAudio) {
-            permissionLauncher.launch(permissionsToRequest.toTypedArray())
+        if (needed.isNotEmpty()) {
+            permissionLauncher.launch(needed.toTypedArray())
         } else {
             onToggleShield(true)
+        }
+    }
+
+    // Dynamic BroadcastReceiver listening to CallMonitorService background alerts
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    "com.xorcall.THREAT_ALERT" -> {
+                        val levelStr = intent.getStringExtra("level") ?: "CRITICAL"
+                        val message = intent.getStringExtra("message") ?: "Extortion Detected!"
+                        val transcript = intent.getStringExtra("transcript") ?: ""
+                        
+                        riskLevel = try { RiskLevel.valueOf(levelStr) } catch (_: Exception) { RiskLevel.CRITICAL }
+                        activeThreatMessage = message
+                        if (transcript.isNotBlank()) {
+                            liveTranscript = "“$transcript”"
+                        }
+                        if (isHapticsEnabled) {
+                            hapticEngine.triggerImmediateShockwave(riskLevel)
+                        }
+                        recentAlerts.add(0, "[IN-CALL INTERCEPT] $message")
+                    }
+                    "com.xorcall.TRANSCRIPT_UPDATE" -> {
+                        val text = intent.getStringExtra("text") ?: ""
+                        if (text.isNotBlank()) {
+                            liveTranscript = "“$text”"
+                        }
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter().apply {
+            addAction("com.xorcall.THREAT_ALERT")
+            addAction("com.xorcall.TRANSCRIPT_UPDATE")
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+
+        onDispose {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (_: Exception) {}
         }
     }
 
@@ -279,14 +288,15 @@ fun MainScreen(
                 HeaderSection()
             }
 
-            // CRITICAL THREAT BANNER
-            if (riskLevel == RiskLevel.CRITICAL) {
-                item {
-                    CriticalThreatAlertBanner(
-                        message = lastThreatMessage ?: "Extortion / Digital Arrest script spotted on call!",
+            // CRITICAL THREAT BANNER (Pops up when extortion is spotted)
+            item {
+                AnimatedVisibility(visible = riskLevel == RiskLevel.CRITICAL || activeThreatMessage != null) {
+                    CriticalAlertCard(
+                        message = activeThreatMessage ?: "Extortion keywords intercepted on active line!",
                         onDial1930 = onDial1930,
                         onDismiss = {
                             riskLevel = RiskLevel.SAFE
+                            activeThreatMessage = null
                             floatingOverlay.dismiss()
                         }
                     )
@@ -319,72 +329,73 @@ fun MainScreen(
                 )
             }
 
-            item {
-                KillChainStageCard(risk = riskLevel)
-            }
-
-            // LIVE VOICE & HAPTICS THREAT INTERCEPTOR CONSOLE
+            // LIVE IN-CALL SPEECH & THREAT HAPTICS TESTER
             item {
                 LiveThreatTesterCard(
                     liveTranscript = liveTranscript,
-                    onVoiceTestClick = {
+                    onStartVoiceInput = {
                         try {
                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Say anything (e.g. 'Accident hospital money' or 'Police CBI digital arrest')")
+                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Say extortion terms (e.g., accident in hospital, police digital arrest, transfer money)")
                             }
-                            voiceInputLauncher.launch(intent)
+                            voiceLauncher.launch(intent)
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
                     },
                     onTriggerAccidentScam = {
-                        val sample = "Accident on highway! Son in hospital custody. Transfer ₹60,000 for bail money right now!"
+                        val sample = "Accident on highway! Need emergency transfer of 50,000 rupees to police for bail now."
                         liveTranscript = "“$sample”"
                         val analysis = sttManager.analyzeText(sample)
                         riskLevel = RiskLevel.CRITICAL
-                        lastThreatMessage = analysis.warningMessage
+                        activeThreatMessage = analysis.warningMessage
                         if (isHapticsEnabled) {
                             hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
                         }
                         if (isBannerEnabled) {
                             floatingOverlay.showCriticalAlert(analysis.warningMessage)
                         }
-                        recentAlerts.add(0, "[SIMULATED ACCIDENT SCAM] ${analysis.warningMessage}")
+                        recentAlerts.add(0, "[SIMULATED CALL] Kinship Accident Bail Extortion Intercepted!")
                     },
-                    onTriggerDigitalArrestScam = {
-                        val sample = "This is Mumbai Police CBI. Parcel with narcotics under your Aadhaar. You are under Digital Arrest. Transfer 4 lakh to RBI escrow."
+                    onTriggerDigitalArrest = {
+                        val sample = "This is CBI Crime Branch. You are under digital arrest. Stay on video call and transfer funds to RBI escrow."
                         liveTranscript = "“$sample”"
                         val analysis = sttManager.analyzeText(sample)
                         riskLevel = RiskLevel.CRITICAL
-                        lastThreatMessage = analysis.warningMessage
+                        activeThreatMessage = analysis.warningMessage
                         if (isHapticsEnabled) {
                             hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
                         }
                         if (isBannerEnabled) {
                             floatingOverlay.showCriticalAlert(analysis.warningMessage)
                         }
-                        recentAlerts.add(0, "[SIMULATED DIGITAL ARREST] ${analysis.warningMessage}")
+                        recentAlerts.add(0, "[SIMULATED CALL] Fake Police CBI 'Digital Arrest' Intercepted!")
                     },
-                    onTriggerHapticsOnly = {
+                    onTriggerHapticBuzzOnly = {
                         hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
-                        recentAlerts.add(0, "[PHYSICAL HAPTICS TEST] Triggered escalating cheek/ear shockwave pulse on hardware.")
+                        recentAlerts.add(0, "[HAPTIC TEST] Hardware Taptic Shockwave Fired on Handset!")
                     },
                     onReset = {
                         riskLevel = RiskLevel.SAFE
-                        lastThreatMessage = null
+                        activeThreatMessage = null
+                        liveTranscript = "Standby: Line cleared. Ready for next incoming call or test."
                         floatingOverlay.dismiss()
-                        recentAlerts.add(0, "[SYSTEM] Line cleared. Threat status returned to SAFE.")
+                        recentAlerts.add(0, "[SYSTEM] Threat neutral. Standby mode restored.")
                     }
                 )
+            }
+
+            item {
+                KillChainStageCard(risk = riskLevel)
             }
 
             item {
                 ModularSensoryTogglesCard(
                     haptics = isHapticsEnabled,
                     onToggleHaptics = { 
-                        isHapticsEnabled = it 
+                        isHapticsEnabled = it
                         hapticEngine.isHapticsEnabled = it
                     },
                     whisper = isAudioWhisperEnabled,
@@ -394,7 +405,7 @@ fun MainScreen(
                     banner = isBannerEnabled,
                     onToggleBanner = { 
                         isBannerEnabled = it 
-                        onRequestOverlay()
+                        if (it) onRequestOverlay()
                     }
                 )
             }
@@ -411,7 +422,7 @@ fun MainScreen(
 
             item {
                 Text(
-                    text = "LIVE FORENSIC AUDIT TELEMETRY",
+                    text = "LIVE AUDIT TELEMETRY",
                     color = Color(0xFF64748B),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -421,6 +432,177 @@ fun MainScreen(
 
             items(recentAlerts.take(6)) { alert ->
                 TelemetryRow(text = alert)
+            }
+        }
+    }
+}
+
+@Composable
+fun CriticalAlertCard(
+    message: String,
+    onDial1930: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF450A0A))
+            .border(1.5.dp, Color(0xFFEF4444), RoundedCornerShape(14.dp))
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("🚨", fontSize = 20.sp)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "CRITICAL EXTORTION INTERCEPTED!",
+                color = Color(0xFFFCA5A5),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = message,
+            color = Color.White,
+            fontSize = 12.sp,
+            lineHeight = 18.sp
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = onDial1930,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1.3f)
+            ) {
+                Text("📞 DIAL 1930 HELPLINE", fontSize = 11.sp, fontWeight = FontWeight.Black)
+            }
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(0.9f)
+            ) {
+                Text("DISMISS", fontSize = 11.sp, color = Color(0xFFCBD5E1))
+            }
+        }
+    }
+}
+
+@Composable
+fun LiveThreatTesterCard(
+    liveTranscript: String,
+    onStartVoiceInput: () -> Unit,
+    onTriggerAccidentScam: () -> Unit,
+    onTriggerDigitalArrest: () -> Unit,
+    onTriggerHapticBuzzOnly: () -> Unit,
+    onReset: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF0D1526))
+            .border(1.dp, Color(0xFF1E3A8A), RoundedCornerShape(14.dp))
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "🎙️ LIVE THREAT & HAPTICS TEST DECK",
+                color = Color(0xFF60A5FA),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = "HARDWARE VERIFIED",
+                color = Color(0xFF10B981),
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Live Speech Box
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF030712))
+                .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))
+                .padding(12.dp)
+        ) {
+            Text(
+                text = liveTranscript,
+                color = Color(0xFFE2E8F0),
+                fontSize = 12.sp,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Big Voice Input Trigger Button
+        Button(
+            onClick = onStartVoiceInput,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text("🎙️ Speak With My Voice (Test Real Microphone)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Instant Scenario Buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = onTriggerAccidentScam,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7F1D1D)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("💥 Accident Bail", fontSize = 10.sp, color = Color(0xFFFECACA))
+            }
+            Button(
+                onClick = onTriggerDigitalArrest,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF991B1B)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("🚨 Digital Arrest", fontSize = 10.sp, color = Color(0xFFFECACA))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = onTriggerHapticBuzzOnly,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF047857)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("📳 Buzz Vibration Shockwave", fontSize = 10.sp, color = Color.White)
+            }
+            OutlinedButton(
+                onClick = onReset,
+                modifier = Modifier.weight(0.7f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Clear", fontSize = 10.sp, color = Color(0xFF94A3B8))
             }
         }
     }
@@ -462,183 +644,6 @@ fun HeaderSection() {
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace
             )
-        }
-    }
-}
-
-@Composable
-fun CriticalThreatAlertBanner(
-    message: String,
-    onDial1930: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF450A0A))
-            .border(2.dp, Color(0xFFEF4444), RoundedCornerShape(14.dp))
-            .padding(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "🚨", fontSize = 20.sp)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "CRITICAL EXTORTION INTERCEPTED",
-                color = Color(0xFFFCA5A5),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.sp
-            )
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = message,
-            color = Color.White,
-            fontSize = 12.sp,
-            lineHeight = 16.sp
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = onDial1930,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("DIAL 1930 NOW", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
-            }
-            OutlinedButton(
-                onClick = onDismiss,
-                modifier = Modifier.weight(0.7f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("DISMISS", fontSize = 11.sp, color = Color(0xFFCBD5E1))
-            }
-        }
-    }
-}
-
-@Composable
-fun LiveThreatTesterCard(
-    liveTranscript: String,
-    onVoiceTestClick: () -> Unit,
-    onTriggerAccidentScam: () -> Unit,
-    onTriggerDigitalArrestScam: () -> Unit,
-    onTriggerHapticsOnly: () -> Unit,
-    onReset: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF0F172A))
-            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(14.dp))
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "LIVE SPEECH & HAPTICS INTERCEPTOR",
-                color = Color(0xFF38BDF8),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF064E3B))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text("ON-DEVICE VAD", color = Color(0xFF34D399), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Live Transcript Box
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF030712))
-                .border(1.dp, Color(0xFF1F2937), RoundedCornerShape(8.dp))
-                .padding(12.dp)
-        ) {
-            Text(
-                text = liveTranscript,
-                color = Color(0xFFE2E8F0),
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                lineHeight = 16.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // 1. Primary Button: Speak with your voice
-        Button(
-            onClick = onVoiceTestClick,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Text("🎙️ Speak Voice (Test Live Threat Intercept)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // 2. Realistic Scam Vectors Quick Test
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = onTriggerAccidentScam,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7F1D1D)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("💥 Accident / Bail", fontSize = 10.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
-            }
-            Button(
-                onClick = onTriggerDigitalArrestScam,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF991B1B)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("🚨 Digital Arrest / CBI", fontSize = 10.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // 3. Hardware Haptic & Reset Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedButton(
-                onClick = onTriggerHapticsOnly,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("📳 Buzz Taptic Shockwave", fontSize = 10.sp, color = Color(0xFF38BDF8))
-            }
-            OutlinedButton(
-                onClick = onReset,
-                modifier = Modifier.weight(0.7f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Clear Threat", fontSize = 10.sp, color = Color(0xFF94A3B8))
-            }
         }
     }
 }
@@ -711,7 +716,7 @@ fun ShieldStatusOrb(
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = if (isActive) "Tap to pause protection" else "Tap to arm real-time defense",
+            text = if (isActive) "Active Cyber Guard (Tap to Pause)" else "Tap to arm real-time defense",
             color = Color(0xFF64748B),
             fontSize = 11.sp
         )
@@ -797,13 +802,13 @@ fun ModularSensoryTogglesCard(
             letterSpacing = 1.sp
         )
         Text(
-            text = "Customizable alerts: Taptic cheek haptics, Whisper TTS & Floating overlay",
+            text = "Customizable alert modalities: choose haptics, audio whispers, or floating banners",
             color = Color(0xFF475569),
             fontSize = 10.sp
         )
         Spacer(modifier = Modifier.height(10.dp))
 
-        InterventionRow("Taptic Cheek Haptics (Vibration Shockwave)", haptics, onToggleHaptics)
+        InterventionRow("Taptic Cheek Haptics (Vibration)", haptics, onToggleHaptics)
         InterventionRow("In-Ear Audio Whisper (TTS)", whisper, onToggleWhisper)
         InterventionRow("Heads-Up Floating Warning Banner", banner, onToggleBanner)
         InterventionRow("Silent Out-Of-Band Family Ping", familyPing, onToggleFamilyPing)
