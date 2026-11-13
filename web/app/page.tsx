@@ -75,7 +75,7 @@ export default function Home() {
   const [safePingSent, setSafePingSent] = useState(false);
   const [dossierDispatched, setDossierDispatched] = useState(false);
 
-  // Track scroll position to trigger clean transition to Light Theme
+  // Mathematically accurate light mode detection based on #clarity section offset
   useEffect(() => {
     const handleScroll = () => {
       const top = window.scrollY || document.documentElement.scrollTop;
@@ -83,8 +83,12 @@ export default function Home() {
       const pct = height > 0 ? top / height : 0;
       setScrollProgress(pct);
 
-      // Light theme activates after the 3D Katana scroll journey (~42% of page)
-      setIsLightMode(pct > 0.42);
+      const clarityEl = document.getElementById("clarity");
+      if (clarityEl) {
+        const rect = clarityEl.getBoundingClientRect();
+        // Switches to light mode ONLY when #clarity is scrolled into the viewport
+        setIsLightMode(rect.top <= 100);
+      }
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -196,7 +200,7 @@ export default function Home() {
       {/* =========================================================================
           ACT 1: THE DARK OBSIDIAN REALM (#0f1014) - PURE NEGATIVE SPACE
           ========================================================================= */}
-      <section id="hero" className="min-h-screen pt-32 pb-16 px-6 sm:px-12 relative flex flex-col justify-between overflow-hidden">
+      <section id="hero" className="min-h-screen pt-32 pb-16 px-6 sm:px-12 relative flex flex-col justify-between overflow-hidden bg-[#0f1014] text-white">
         
         {/* Giant Parallax Watermark Text (Space Grotesk) */}
         <div 
@@ -242,9 +246,9 @@ export default function Home() {
       </section>
 
       {/* =========================================================================
-          THE 3D CYBER KATANA 5-PHASE SCROLL JOURNEY (PURE NEGATIVE SPACE)
+          THE 3D CYBER KATANA 5-PHASE SCROLL JOURNEY (ALWAYS DARK, PURE NEGATIVE SPACE)
           ========================================================================= */}
-      <section id="journey" className="w-full relative">
+      <section id="journey" className="w-full relative bg-[#0f1014]">
         <KatanaScrollJourney />
       </section>
 
@@ -252,7 +256,7 @@ export default function Home() {
           ACT 2: TRANSITION TO WARM ARCHITECTURAL BONE / CHALK THEME (#e2dde3)
           Exact match to user reference image (media_1794570774157_1235ccf2.png)
           ========================================================================= */}
-      <div className="w-full transition-colors duration-700 bg-[#e2dde3] text-[#14151a]">
+      <div id="clarity-container" className="w-full transition-colors duration-700 bg-[#e2dde3] text-[#14151a]">
         
         {/* Section: "Defend With Clarity" (Exact replication of user screenshot) */}
         <section id="clarity" className="min-h-screen pt-32 pb-24 px-8 sm:px-16 max-w-7xl mx-auto flex flex-col justify-between relative border-t border-black/10">
@@ -275,7 +279,7 @@ export default function Home() {
 
           {/* Centerpiece: Clean Negative Space Symbol (Replicating user image "( べ )") */}
           <div className="my-24 flex items-center justify-center">
-            <span className="font-display text-5xl sm:text-7xl font-bold text-[#14151a]/80 tracking-widest">
+            <span className="font-display text-5xl sm:text-7xl font-bold text-[#14151a]/85 tracking-widest">
               ( べ )
             </span>
           </div>
@@ -284,28 +288,28 @@ export default function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 border-t border-black/10 pt-12">
             <div>
               <div className="text-xs font-mono text-[#70717b] mb-3">(1)</div>
-              <p className="text-xs text-[#555660] leading-relaxed font-sans">
+              <p className="text-xs text-[#555660] leading-relaxed font-sans font-medium">
                 Uses native on-device Sherpa-ONNX streaming Zipformer, refined by a precision mathematical formula.
               </p>
             </div>
 
             <div>
               <div className="text-xs font-mono text-[#70717b] mb-3">(2)</div>
-              <p className="text-xs text-[#555660] leading-relaxed font-sans">
+              <p className="text-xs text-[#555660] leading-relaxed font-sans font-medium">
                 Designed with a lightweight offline architecture that lets zero audio stream to remote servers.
               </p>
             </div>
 
             <div>
               <div className="text-xs font-mono text-[#70717b] mb-3">(3)</div>
-              <p className="text-xs text-[#555660] leading-relaxed font-sans">
+              <p className="text-xs text-[#555660] leading-relaxed font-sans font-medium">
                 Configure behavior directly in markup with modular controls — no vibration required until you really want it.
               </p>
             </div>
 
             <div>
               <div className="text-xs font-mono text-[#70717b] mb-3">(4)</div>
-              <p className="text-xs text-[#555660] leading-relaxed font-sans">
+              <p className="text-xs text-[#555660] leading-relaxed font-sans font-medium">
                 Built for BSA-compliant digital forensics packaging, open to instant 1-click dispatch to 1930 / I4C.
               </p>
             </div>
@@ -348,7 +352,7 @@ export default function Home() {
           </div>
 
           {/* Minimalist Interceptor Console Box */}
-          <div className="bg-white/90 rounded-3xl p-6 sm:p-8 border border-black/10 shadow-xl backdrop-blur-md">
+          <div className="bg-white/95 rounded-3xl p-6 sm:p-8 border border-black/10 shadow-xl backdrop-blur-md">
             
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-black/10">
               <div className="flex items-center gap-3">

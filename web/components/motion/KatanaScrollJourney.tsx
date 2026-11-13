@@ -8,31 +8,36 @@ const PHRASES = [
     phase: "PHASE 01 // IMPERSONATION",
     title: "The Hook Pretext",
     quote: "“A parcel containing 140g narcotics seized under your Aadhaar card.”",
-    color: "text-red-400"
+    color: "text-red-400",
+    stageNum: "01"
   },
   {
     phase: "PHASE 02 // COERCION",
     title: "Digital Arrest",
     quote: "“You are under non-bailable arrest. Immediate video confinement active.”",
-    color: "text-amber-400"
+    color: "text-amber-400",
+    stageNum: "02"
   },
   {
     phase: "PHASE 03 // ISOLATION",
     title: "Psychological Isolation",
     quote: "“Lock your door. Stay on camera. Do not inform any family member.”",
-    color: "text-blue-400"
+    color: "text-blue-400",
+    stageNum: "03"
   },
   {
     phase: "PHASE 04 // EXTORTION",
     title: "Liquidation Vault",
     quote: "“Transfer ₹4,00,000 by RTGS to RBI verification escrow account now.”",
-    color: "text-rose-400"
+    color: "text-rose-400",
+    stageNum: "04"
   },
   {
     phase: "PHASE 05 // NEUTRALIZED",
     title: "XORcall Disruption",
     quote: "“Line severed by on-device Zipformer. Tamper-evident dossier locked to 1930.”",
-    color: "text-emerald-400"
+    color: "text-emerald-400",
+    stageNum: "05"
   }
 ];
 
@@ -58,42 +63,41 @@ export default function KatanaScrollJourney() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Compute active phrase index (0 to 4)
   const activeIdx = Math.min(PHRASES.length - 1, Math.floor(journeyProgress * PHRASES.length));
   const currentPhrase = PHRASES[activeIdx];
 
   return (
-    <div ref={containerRef} className="relative w-full h-[320vh]">
+    <div ref={containerRef} className="relative w-full h-[400vh] bg-[#0f1014] text-white">
       
-      {/* Sticky Viewport Pinned in Center Screen (Pure Negative Space, Zero Clutter) */}
-      <div className="sticky top-0 h-screen w-full flex flex-col justify-between items-center py-20 px-6 overflow-hidden">
+      {/* Sticky Viewport Pinned in Center Screen (Always Dark, Pure Negative Space) */}
+      <div className="sticky top-0 h-screen w-full flex flex-col justify-between items-center py-16 px-6 overflow-hidden bg-[#0f1014] z-20">
         
-        {/* Dynamic Phase Badge & Title */}
-        <div className="z-10 text-center max-w-xl transition-all duration-300">
+        {/* Top Phase Header */}
+        <div className="z-30 text-center max-w-2xl pt-6 transition-all duration-300">
           <div className="text-[11px] font-mono tracking-widest uppercase font-bold text-slate-400 mb-2">
             {currentPhrase.phase}
           </div>
-          <h2 className="font-display text-4xl sm:text-6xl font-black text-white tracking-tight">
+          <h2 className="font-display text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight">
             {currentPhrase.title}
           </h2>
         </div>
 
-        {/* Central 3D Cyber Katana Canvas (Unsheathes Horizontally Across the Phrases) */}
-        <div className="w-full max-w-4xl h-64 sm:h-80 z-20 flex items-center justify-center">
+        {/* 3D Katana Canvas (Fills Screen, Upper Blade & Lower Scabbard Split Around Center) */}
+        <div className="absolute inset-0 w-full h-full z-10 pointer-events-none flex items-center justify-center">
           <CyberKatana3D progress={journeyProgress} className="w-full h-full" />
         </div>
 
-        {/* Dynamic Scam Quote Subtitle (Pure Typography, Zero Boxes) */}
-        <div className="z-10 text-center max-w-2xl px-4 transition-all duration-300">
-          <p className="font-display text-lg sm:text-2xl text-slate-300 font-normal leading-relaxed italic">
+        {/* Center Quote Overlay (Pure Space Grotesk Typography, Razor-Sharp Negative Space) */}
+        <div className="z-30 text-center max-w-3xl px-6 transition-all duration-300 pb-12">
+          <p className="font-display text-xl sm:text-3xl text-slate-200 font-normal leading-relaxed italic drop-shadow-lg">
             {currentPhrase.quote}
           </p>
 
-          <div className="mt-4 flex items-center justify-center gap-3 text-[10px] font-mono tracking-widest text-slate-500">
-            <span>SCROLL PROGRESS: {Math.round(journeyProgress * 100)}%</span>
-            <span>·</span>
-            <span className={currentPhrase.color}>
-              STAGE {activeIdx + 1} OF 5
+          <div className="mt-6 flex items-center justify-center gap-4 text-[11px] font-mono tracking-widest text-slate-400">
+            <span>KATANA UNSHEATHE : {Math.round(journeyProgress * 100)}%</span>
+            <span className="text-slate-600">·</span>
+            <span className={`font-bold ${currentPhrase.color}`}>
+              STAGE {currentPhrase.stageNum} OF 05
             </span>
           </div>
         </div>
