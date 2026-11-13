@@ -11,26 +11,37 @@ export default function StringTuneScroll() {
 
     let stringTuneInstance: any = null;
 
+    // Dynamically load StringTune on client side
     import("@fiddle-digital/string-tune")
       .then((mod) => {
         try {
-          const StringTune = mod.default || mod.StringTune;
-          const StringParallax = mod.StringParallax;
+          const { StringTune, StringParallax, StringMagnetic, StringTilt, StringSpotlight } = mod;
           if (StringTune && typeof StringTune.getInstance === "function") {
             stringTuneInstance = StringTune.getInstance();
+            
             if (StringParallax && typeof stringTuneInstance.use === "function") {
               stringTuneInstance.use(StringParallax);
             }
+            if (StringMagnetic && typeof stringTuneInstance.use === "function") {
+              stringTuneInstance.use(StringMagnetic);
+            }
+            if (StringTilt && typeof stringTuneInstance.use === "function") {
+              stringTuneInstance.use(StringTilt);
+            }
+            if (StringSpotlight && typeof stringTuneInstance.use === "function") {
+              stringTuneInstance.use(StringSpotlight);
+            }
+
             if (typeof stringTuneInstance.start === "function") {
               stringTuneInstance.start(60);
             }
           }
         } catch (e) {
-          console.warn("StringTune dynamic initialization note:", e);
+          console.warn("StringTune init notice:", e);
         }
       })
       .catch((e) => {
-        console.warn("StringTune dynamic import note:", e);
+        console.warn("StringTune import notice:", e);
       });
 
     return () => {
@@ -39,7 +50,7 @@ export default function StringTuneScroll() {
           stringTuneInstance.destroy();
         }
       } catch {
-        // cleanup safe
+        // safe cleanup
       }
     };
   }, []);
