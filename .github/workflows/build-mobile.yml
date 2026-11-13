@@ -46,25 +46,25 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.0-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.1-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.2.0-debug.apk
+          path: build-artifacts/XORcall-v1.2.1-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.0-apk
-          name: "XORcall v1.2.0 Android APK (Auto-Speakerphone Intercept + Groq Whisper STT + AI Voice Clone Radar)"
+          tag_name: v1.2.1-apk
+          name: "XORcall v1.2.1 Android APK (Live Mic Crash Fix + Android 14 In-Call Audio Stream + Calibrated Voice Radar)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.0
-            - **Auto-Speakerphone In-Call Capture**: Automatically engages loudspeaker upon `OFFHOOK` and binds raw `MIC` stream with +20dB digital AGC amplification, allowing the phone to capture both the remote caller's audio and the user's speech without being stripped by Android hardware echo cancellation.
-            - **Dual Hybrid Speech Pipeline (Groq Whisper Turbo + Vosk Offline)**: Integrates Groq LPU Whisper Turbo (`whisper-large-v3-turbo`) for sub-200ms cloud transcription with superior Indian English and vernacular accuracy, while retaining bundled on-device Vosk Kaldi as instant offline fallback.
-            - **Scientific AI Voice Clone Radar**: 512-point windowed Cooley-Tukey FFT spectral analysis, high-frequency vocoder cutoff ratio (>6.5 kHz), Wiener entropy spectral flatness, and Normalized Autocorrelation pitch micro-jitter tracking (0.5%-2.5% biological human vs <0.3% neural vocoder rigidity).
-            - **Real-Time Live Forensic Dashboard**: Live acoustic radar displaying micro-jitter %, HF ratio, spectral entropy, and instant verdict (Human vs AI Clone).
-          files: build-artifacts/XORcall-v1.2.0-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.1
+            - **Live Mic Speak Test & Overlay Thread Safety Fix**: Resolved `CalledFromWrongThreadException` and Compose background snapshot mutation by executing all UI mutations and `FloatingAlertOverlay` WindowManager calls strictly on `Dispatchers.Main` / `Looper.getMainLooper()`.
+            - **Android 14 In-Call Audio Stream (`VOICE_RECOGNITION`)**: Prioritized `MediaRecorder.AudioSource.VOICE_RECOGNITION` over `MIC` during telephony communication (`OFFHOOK`), bypassing Android 14 `AudioPolicy` silence suppression and hardware acoustic echo cancellation.
+            - **Modern Android 12+ (API 31+) Speakerphone Routing**: Switched from deprecated `isSpeakerphoneOn` to `AudioManager.setCommunicationDevice(TYPE_BUILTIN_SPEAKER)`, ensuring reliable auto-speakerphone activation during active phone calls on Android 12, 13, and 14 (tested on FuntouchOS / MediaTek Dimensity).
+            - **Calibrated AI Voice vs Biological Human Detection**: Redesigned acoustic radar scoring model with biological vocal fold micro-jitter (>0.5% jitter verifies natural human voice, forcing synthetic confidence to nominal <0.10). AI voice clone flag strictly requires rigid neural pitch contour (<0.28% micro-jitter over >=6 voiced frames) and elevated spectral Wiener entropy (>0.42).
+          files: build-artifacts/XORcall-v1.2.1-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

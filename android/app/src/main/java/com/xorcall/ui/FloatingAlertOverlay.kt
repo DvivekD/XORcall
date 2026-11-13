@@ -57,101 +57,104 @@ class FloatingAlertOverlay(private val context: Context) {
         // 1. Always fire an intrusive, high-priority Heads-Up Notification (100% visible over any dialer/call screen)
         sendHeadsUpNotification(warningText)
 
-        // 2. If System Overlay permission is granted, inject floating banner overlay
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
-            return
-        }
-
-        if (overlayView != null) return
-
-        try {
-            val layoutParamsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
+        // 2. If System Overlay permission is granted, inject floating banner overlay safely on Main Looper
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        mainHandler.post {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+                return@post
             }
 
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                layoutParamsType,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                y = 60
-            }
+            if (overlayView != null) return@post
 
-            val container = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundColor(0xF0180404.toInt()) // Deep Crimson Dark Slate
-                setPadding(36, 28, 36, 28)
-            }
+            try {
+                val layoutParamsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
 
-            val header = TextView(context).apply {
-                text = "🚨 KAVACH CYBER GUARDIAN: THREAT INTERCEPTED"
-                textSize = 14f
-                setTextColor(0xFFFF3333.toInt())
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-            }
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    layoutParamsType,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    y = 60
+                }
 
-            val body = TextView(context).apply {
-                text = warningText
-                textSize = 13f
-                setTextColor(0xFFF1F5F9.toInt())
-                setPadding(0, 12, 0, 16)
-            }
+                val container = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setBackgroundColor(0xF0180404.toInt()) // Deep Crimson Dark Slate
+                    setPadding(36, 28, 36, 28)
+                }
 
-            val buttonRow = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.END
-            }
+                val header = TextView(context).apply {
+                    text = "🚨 KAVACH CYBER GUARDIAN: THREAT INTERCEPTED"
+                    textSize = 14f
+                    setTextColor(0xFFFF3333.toInt())
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                }
 
-            val dial1930Btn = TextView(context).apply {
-                text = "📞 DIAL 1930 HELPLINE"
-                textSize = 12f
-                setTextColor(0xFFFFFFFF.toInt())
-                setBackgroundColor(0xFFDC2626.toInt())
-                setPadding(28, 16, 28, 16)
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setOnClickListener {
-                    try {
-                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:1930")).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                val body = TextView(context).apply {
+                    text = warningText
+                    textSize = 13f
+                    setTextColor(0xFFF1F5F9.toInt())
+                    setPadding(0, 12, 0, 16)
+                }
+
+                val buttonRow = LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.END
+                }
+
+                val dial1930Btn = TextView(context).apply {
+                    text = "📞 DIAL 1930 HELPLINE"
+                    textSize = 12f
+                    setTextColor(0xFFFFFFFF.toInt())
+                    setBackgroundColor(0xFFDC2626.toInt())
+                    setPadding(28, 16, 28, 16)
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setOnClickListener {
+                        try {
+                            val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:1930")).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(dialIntent)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
-                        context.startActivity(dialIntent)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                        dismiss()
                     }
-                    dismiss()
                 }
-            }
 
-            val dismissBtn = TextView(context).apply {
-                text = "DISMISS"
-                textSize = 12f
-                setTextColor(0xFF94A3B8.toInt())
-                setPadding(28, 16, 28, 16)
-                setOnClickListener {
-                    dismiss()
+                val dismissBtn = TextView(context).apply {
+                    text = "DISMISS"
+                    textSize = 12f
+                    setTextColor(0xFF94A3B8.toInt())
+                    setPadding(28, 16, 28, 16)
+                    setOnClickListener {
+                        dismiss()
+                    }
                 }
+
+                buttonRow.addView(dismissBtn)
+                buttonRow.addView(dial1930Btn)
+
+                container.addView(header)
+                container.addView(body)
+                container.addView(buttonRow)
+
+                overlayView = container
+                windowManager.addView(container, params)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-
-            buttonRow.addView(dismissBtn)
-            buttonRow.addView(dial1930Btn)
-
-            container.addView(header)
-            container.addView(body)
-            container.addView(buttonRow)
-
-            overlayView = container
-            windowManager.addView(container, params)
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
@@ -197,13 +200,16 @@ class FloatingAlertOverlay(private val context: Context) {
     }
 
     fun dismiss() {
-        overlayView?.let {
-            try {
-                windowManager.removeView(it)
-            } catch (e: Exception) {
-                e.printStackTrace()
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        mainHandler.post {
+            overlayView?.let {
+                try {
+                    windowManager.removeView(it)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                overlayView = null
             }
-            overlayView = null
         }
     }
 }

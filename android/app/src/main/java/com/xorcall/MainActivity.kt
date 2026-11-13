@@ -203,14 +203,18 @@ fun MainScreen(
 
     DisposableEffect(sttManager) {
         sttManager.onModelReady = {
-            isVoskReady = true
-            isUnpacking = false
-            voskErrorMessage = null
+            coroutineScope.launch(Dispatchers.Main) {
+                isVoskReady = true
+                isUnpacking = false
+                voskErrorMessage = null
+            }
         }
         sttManager.onAcousticResult = { result ->
-            latestAcousticResult = result
-            if (result.isSyntheticVoice) {
-                lastAiVoiceStatus = result.analysisReason
+            coroutineScope.launch(Dispatchers.Main) {
+                latestAcousticResult = result
+                if (result.isSyntheticVoice) {
+                    lastAiVoiceStatus = result.analysisReason
+                }
             }
         }
         onDispose { }
@@ -267,13 +271,30 @@ fun MainScreen(
             val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096)
             var recorder: AudioRecord? = null
             try {
-                recorder = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, minBuf)
-                if (recorder.state == AudioRecord.STATE_INITIALIZED) {
+                // Try VOICE_RECOGNITION first, fallback to standard MIC
+                val sources = intArrayOf(
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                    MediaRecorder.AudioSource.MIC
+                )
+                for (src in sources) {
+                    try {
+                        val rec = AudioRecord(src, sampleRate, channelConfig, audioFormat, minBuf)
+                        if (rec.state == AudioRecord.STATE_INITIALIZED) {
+                            recorder = rec
+                            break
+                        } else {
+                            rec.release()
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                if (recorder != null && recorder.state == AudioRecord.STATE_INITIALIZED) {
                     recorder.startRecording()
                     val pcmBuffer = ShortArray(minBuf / 2)
                     val boostedBuffer = ShortArray(minBuf / 2)
                     val digitalGain = 6.0f
                     val endAt = System.currentTimeMillis() + 6000L
+                    var lastUiUpdate = 0L
                     while (System.currentTimeMillis() < endAt && isMicTesting) {
                         val read = recorder.read(pcmBuffer, 0, pcmBuffer.size)
                         if (read > 0) {
@@ -285,20 +306,29 @@ fun MainScreen(
                                 boostedBuffer[i] = sample
                                 sumSquares += sample.toDouble() * sample.toDouble()
                             }
-                            val rms = kotlin.math.sqrt(sumSquares / read) / 32768.0
-                            liveAudioRms = rms.toFloat()
-                            liveAudioSource = "Live Mic Test"
+                            val rms = (kotlin.math.sqrt(sumSquares / read) / 32768.0).toFloat()
+                            val now = System.currentTimeMillis()
+                            if (now - lastUiUpdate > 80) {
+                                lastUiUpdate = now
+                                withContext(Dispatchers.Main) {
+                                    liveAudioRms = rms
+                                    liveAudioSource = "Live Mic Test"
+                                }
+                            }
                             sttManager.acceptAudioChunkRaw(boostedBuffer, read)
                         }
                     }
                 } else {
                     withContext(Dispatchers.Main) {
                         liveTranscript = "⚡ Call Guardian is actively listening to phone audio stream in background."
-                        Toast.makeText(context, "Guardian Service active on audio line.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Audio recorder busy or active in background.", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Mic test error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             } finally {
                 try {
                     recorder?.stop()
@@ -306,6 +336,7 @@ fun MainScreen(
                 } catch (_: Exception) {}
                 withContext(Dispatchers.Main) {
                     isMicTesting = false
+                    liveAudioRms = 0f
                 }
             }
         }
@@ -314,25 +345,27 @@ fun MainScreen(
     // Set threat detection callback on STT engine
     LaunchedEffect(sttManager, activeVector, isHapticsEnabled, isBannerEnabled, isAudioWhisperEnabled, isFamilyPingEnabled) {
         sttManager.onThreatDetected = { analysis, transcript ->
-            riskLevel = analysis.riskLevel
-            lastThreatMessage = analysis.warningMessage
-            if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
-            if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
-            if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
-            if (isFamilyPingEnabled) {
-                guardianPingManager.sendSilentGuardianPing("Live Spoken Words", analysis.warningMessage, analysis.demographicVector)
+            coroutineScope.launch(Dispatchers.Main) {
+                riskLevel = analysis.riskLevel
+                lastThreatMessage = analysis.warningMessage
+                if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
+                if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+                if (isFamilyPingEnabled) {
+                    guardianPingManager.sendSilentGuardianPing("Live Spoken Words", analysis.warningMessage, analysis.demographicVector)
+                }
+                historyManager.recordCall(
+                    callerNumber = "Live Spoken Words",
+                    callerClassification = "SPOKEN_WORDS",
+                    vector = analysis.demographicVector,
+                    risk = analysis.riskLevel,
+                    isSynthetic = analysis.isSyntheticVoice,
+                    syntheticConfidence = analysis.syntheticConfidence,
+                    keywords = analysis.matchedKeywords,
+                    transcript = transcript
+                )
+                refreshHistory()
             }
-            historyManager.recordCall(
-                callerNumber = "Live Spoken Words",
-                callerClassification = "SPOKEN_WORDS",
-                vector = analysis.demographicVector,
-                risk = analysis.riskLevel,
-                isSynthetic = analysis.isSyntheticVoice,
-                syntheticConfidence = analysis.syntheticConfidence,
-                keywords = analysis.matchedKeywords,
-                transcript = transcript
-            )
-            refreshHistory()
         }
     }
 

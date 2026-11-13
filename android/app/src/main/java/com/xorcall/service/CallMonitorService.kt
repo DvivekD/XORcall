@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -172,16 +173,50 @@ class CallMonitorService : Service(), TelemetryListener {
     }
 
     private fun toggleSpeakerphone() {
+        val currentState = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audioManager.communicationDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.isSpeakerphoneOn
+        }
+        setSpeakerphoneState(!currentState)
+    }
+
+    /**
+     * Sets speakerphone routing reliably across all Android versions (Android 8 through Android 14+).
+     * On Android 12+ (API 31+), uses audioManager.setCommunicationDevice(TYPE_BUILTIN_SPEAKER).
+     */
+    private fun setSpeakerphoneState(enable: Boolean) {
         try {
-            val newState = !audioManager.isSpeakerphoneOn
-            audioManager.isSpeakerphoneOn = newState
+            audioManager.mode = if (enable) AudioManager.MODE_IN_COMMUNICATION else AudioManager.MODE_NORMAL
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (enable) {
+                    val speakerDevice = audioManager.availableCommunicationDevices.firstOrNull {
+                        it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                    }
+                    if (speakerDevice != null) {
+                        val success = audioManager.setCommunicationDevice(speakerDevice)
+                        Log.i(TAG, "setCommunicationDevice(BUILTIN_SPEAKER): $success")
+                    } else {
+                        @Suppress("DEPRECATION")
+                        audioManager.isSpeakerphoneOn = true
+                    }
+                } else {
+                    audioManager.clearCommunicationDevice()
+                    @Suppress("DEPRECATION")
+                    audioManager.isSpeakerphoneOn = false
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = enable
+            }
             val intent = Intent("com.xorcall.SPEAKER_STATE").apply {
-                putExtra("isSpeakerOn", newState)
+                putExtra("isSpeakerOn", enable)
                 setPackage(packageName)
             }
             sendBroadcast(intent)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to toggle speakerphone", e)
+            Log.e(TAG, "Failed to set speakerphone state to $enable", e)
         }
     }
 
@@ -253,33 +288,14 @@ class CallMonitorService : Service(), TelemetryListener {
             isCallActive = true
             Log.i(TAG, "Call connected (OFFHOOK): Engaging Direct In-Call Audio Capture")
             if (settingsManager.isAutoSpeakerphoneEnabled) {
-                try {
-                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                    audioManager.isSpeakerphoneOn = true
-                    Log.i(TAG, "Auto-speakerphone engaged on OFFHOOK for live call intercept")
-                    val speakerIntent = Intent("com.xorcall.SPEAKER_STATE").apply {
-                        putExtra("isSpeakerOn", true)
-                        setPackage(packageName)
-                    }
-                    sendBroadcast(speakerIntent)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Auto-speakerphone toggle failed", e)
-                }
+                setSpeakerphoneState(true)
             }
             startAudioCapture(isCallOngoing = true)
         } else if (callState == "IDLE") {
             isCallActive = false
             currentCallerNumber = "Standby (Shield Armed)"
             Log.i(TAG, "Call ended (IDLE): Restoring normal audio routing")
-            try {
-                audioManager.isSpeakerphoneOn = false
-                audioManager.mode = AudioManager.MODE_NORMAL
-                val speakerIntent = Intent("com.xorcall.SPEAKER_STATE").apply {
-                    putExtra("isSpeakerOn", false)
-                    setPackage(packageName)
-                }
-                sendBroadcast(speakerIntent)
-            } catch (_: Exception) {}
+            setSpeakerphoneState(false)
             startAudioCapture(isCallOngoing = false)
         }
 
@@ -346,17 +362,17 @@ class CallMonitorService : Service(), TelemetryListener {
                 }
 
                 val inCallSources = listOf(
+                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION (Direct Speech Line)"),
+                    Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex AEC)"),
                     Pair(MediaRecorder.AudioSource.MIC, "MIC (Loudspeaker Intercept)"),
-                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
                     Pair(MediaRecorder.AudioSource.DEFAULT, "DEFAULT"),
-                    Pair(MediaRecorder.AudioSource.VOICE_CALL, "VOICE_CALL (Direct Line)"),
-                    Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex)"),
+                    Pair(MediaRecorder.AudioSource.VOICE_CALL, "VOICE_CALL (Direct Modem)"),
                     Pair(MediaRecorder.AudioSource.VOICE_DOWNLINK, "VOICE_DOWNLINK (Remote Caller)")
                 )
 
                 val standbySources = listOf(
-                    Pair(MediaRecorder.AudioSource.MIC, "MIC"),
                     Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
+                    Pair(MediaRecorder.AudioSource.MIC, "MIC"),
                     Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex)"),
                     Pair(MediaRecorder.AudioSource.DEFAULT, "DEFAULT")
                 )
@@ -398,10 +414,14 @@ class CallMonitorService : Service(), TelemetryListener {
                         loopIteration++
                         // Periodically reinforce speakerphone during active call
                         if (isCallOngoing && loopIteration % 50 == 0 && settingsManager.isAutoSpeakerphoneEnabled) {
-                            if (!audioManager.isSpeakerphoneOn) {
-                                try {
-                                    audioManager.isSpeakerphoneOn = true
-                                } catch (_: Exception) {}
+                            val isSpeaker = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                audioManager.communicationDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                            } else {
+                                @Suppress("DEPRECATION")
+                                audioManager.isSpeakerphoneOn
+                            }
+                            if (!isSpeaker) {
+                                setSpeakerphoneState(true)
                             }
                         }
 
@@ -528,6 +548,7 @@ class CallMonitorService : Service(), TelemetryListener {
         try {
             unregisterReceiver(settingsReceiver)
         } catch (_: Exception) {}
+        setSpeakerphoneState(false)
         stopAudioCaptureInternal()
         hapticEngine.stopListening()
         whisperEngine.shutdown()

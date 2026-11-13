@@ -12,6 +12,11 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **In-Call Audio Stream (`VOICE_RECOGNITION`), Android 14 Speakerphone Routing & Crash-Proof Mic Test (`v1.2.1`)**:
+  1. *Live Mic Test Thread Safety Fix*: Fixed `CalledFromWrongThreadException` and Compose background snapshot state concurrency by strictly executing `FloatingAlertOverlay` WindowManager calls and all Compose state updates on `Dispatchers.Main` / `Looper.getMainLooper()`.
+  2. *Android 14 In-Call Audio Stream*: Bypassed Android 14 `AudioPolicy` silence suppression on standard `AudioSource.MIC` during cellular phone calls by prioritizing `MediaRecorder.AudioSource.VOICE_RECOGNITION`. `VOICE_RECOGNITION` grants third-party STT engines active audio input during telephony and disables hardware echo-cancellation from filtering out remote party speech.
+  3. *Android 12+ (API 31+) Speakerphone Routing*: Switched deprecated `audioManager.isSpeakerphoneOn = true` to `audioManager.setCommunicationDevice(TYPE_BUILTIN_SPEAKER)`, ensuring reliable hardware loudspeaker audio routing on Android 12, 13, and 14 (tested on FuntouchOS / MediaTek Dimensity).
+  4. *Calibrated AI Voice vs Biological Human Detection*: Redesigned acoustic radar scoring model: natural human vocal cord micro-tremor (jitter >= 0.50%) forces synthetic confidence to nominal (<0.10). Neural vocoder flag strictly requires rigid harmonic pitch contours (<0.28% jitter over >=6 voiced frames) and elevated spectral Wiener entropy (>0.42).
 - **Auto-Speakerphone In-Call Interceptor & Groq Whisper Cloud Hybrid STT (`v1.2.0`)**: 
   1. *Auto-Speakerphone*: Automatically engages loudspeaker on `OFFHOOK` and binds raw `MIC` stream with +20dB digital AGC amplification. Completely bypasses Android 14 hardware echo cancellation (`VOICE_COMMUNICATION` AEC) that historically stripped the remote caller's audio from being captured by third-party apps. Captures both parties clearly.
   2. *Dual Hybrid Speech-to-Text*: High-accuracy Groq LPU Whisper Turbo (`whisper-large-v3-turbo`) with sub-200ms latency for Indian English and Hinglish transcription, backed by 100% offline bundled Vosk Kaldi model as local baseline.
