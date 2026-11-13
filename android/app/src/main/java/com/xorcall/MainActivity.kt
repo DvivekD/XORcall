@@ -278,7 +278,7 @@ fun ShieldStatusOrb(
             .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(16.dp))
             .clickable { onToggle() }
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterVertically
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
@@ -292,7 +292,7 @@ fun ShieldStatusOrb(
                 .border(2.dp, orbColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterVertically) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = if (isActive) "SHIELD" else "STANDBY",
                     color = Color.White,
