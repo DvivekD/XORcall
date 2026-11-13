@@ -46,25 +46,26 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.1-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.2-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.2.1-debug.apk
+          path: build-artifacts/XORcall-v1.2.2-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.1-apk
-          name: "XORcall v1.2.1 Android APK (Live Mic Crash Fix + Android 14 In-Call Audio Stream + Calibrated Voice Radar)"
+          tag_name: v1.2.2-apk
+          name: "XORcall v1.2.2 Android APK (Permanent Signing Keystore + Live Mic Crash Fix + Android 14 In-Call Audio)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.1
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.2
+            - **Permanent Cryptographic Signing Keystore (v1 + v2 Schemes)**: Configured committed debug keystore with both v1 (JAR signing) and v2 (APK Signing Block 42) enabled. Prevents `INSTALL_FAILED_UPDATE_INCOMPATIBLE` ("Check APK") errors on Vivo FuntouchOS / Android package installers.
             - **Live Mic Speak Test & Overlay Thread Safety Fix**: Resolved `CalledFromWrongThreadException` and Compose background snapshot mutation by executing all UI mutations and `FloatingAlertOverlay` WindowManager calls strictly on `Dispatchers.Main` / `Looper.getMainLooper()`.
             - **Android 14 In-Call Audio Stream (`VOICE_RECOGNITION`)**: Prioritized `MediaRecorder.AudioSource.VOICE_RECOGNITION` over `MIC` during telephony communication (`OFFHOOK`), bypassing Android 14 `AudioPolicy` silence suppression and hardware acoustic echo cancellation.
             - **Modern Android 12+ (API 31+) Speakerphone Routing**: Switched from deprecated `isSpeakerphoneOn` to `AudioManager.setCommunicationDevice(TYPE_BUILTIN_SPEAKER)`, ensuring reliable auto-speakerphone activation during active phone calls on Android 12, 13, and 14 (tested on FuntouchOS / MediaTek Dimensity).
             - **Calibrated AI Voice vs Biological Human Detection**: Redesigned acoustic radar scoring model with biological vocal fold micro-jitter (>0.5% jitter verifies natural human voice, forcing synthetic confidence to nominal <0.10). AI voice clone flag strictly requires rigid neural pitch contour (<0.28% micro-jitter over >=6 voiced frames) and elevated spectral Wiener entropy (>0.42).
-          files: build-artifacts/XORcall-v1.2.1-debug.apk
+          files: build-artifacts/XORcall-v1.2.2-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

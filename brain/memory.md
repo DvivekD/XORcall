@@ -12,6 +12,8 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **Permanent Keystore Signing & In-Place Update Compatibility (`v1.2.2`)**:
+  1. *Committed Permanent Keystore (`debug.keystore`)*: Resolved `INSTALL_FAILED_UPDATE_INCOMPATIBLE` ("Check APK") by committing a permanent PKCS12 debug keystore and enabling both `enableV1Signing = true` (JAR signing) and `enableV2Signing = true` (APK Sig Block 42). All future CI builds use the exact same signature, allowing smooth updates without uninstalling.
 - **In-Call Audio Stream (`VOICE_RECOGNITION`), Android 14 Speakerphone Routing & Crash-Proof Mic Test (`v1.2.1`)**:
   1. *Live Mic Test Thread Safety Fix*: Fixed `CalledFromWrongThreadException` and Compose background snapshot state concurrency by strictly executing `FloatingAlertOverlay` WindowManager calls and all Compose state updates on `Dispatchers.Main` / `Looper.getMainLooper()`.
   2. *Android 14 In-Call Audio Stream*: Bypassed Android 14 `AudioPolicy` silence suppression on standard `AudioSource.MIC` during cellular phone calls by prioritizing `MediaRecorder.AudioSource.VOICE_RECOGNITION`. `VOICE_RECOGNITION` grants third-party STT engines active audio input during telephony and disables hardware echo-cancellation from filtering out remote party speech.
