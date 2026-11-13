@@ -1,17 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import TelemetryHUD from "@/components/ui/TelemetryHUD";
-import DualConductorUnsheathe from "@/components/motion/DualConductorUnsheathe";
-import WordBlurMorph from "@/components/motion/WordBlurMorph";
+import KatanaScrollJourney from "@/components/motion/KatanaScrollJourney";
 import GuardianCompanion from "@/components/ui/GuardianCompanion";
 import CyberWarfareGlobe3D from "@/components/motion/CyberWarfareGlobe3D";
 import AudioFrequencyRibbon3D from "@/components/motion/AudioFrequencyRibbon3D";
 import { 
-  ShieldAlert, ShieldCheck, Zap, Radio, PhoneCall, ChevronRight, 
-  CheckCircle2, AlertOctagon, Vibrate, Volume2, Eye, UserCheck, 
-  ExternalLink, Sparkles, Activity
+  Zap, Radio, PhoneCall, ChevronRight, AlertOctagon, 
+  Vibrate, Volume2, Eye, UserCheck
 } from "lucide-react";
 
 const SCENARIOS = [
@@ -77,7 +75,7 @@ export default function Home() {
   const [safePingSent, setSafePingSent] = useState(false);
   const [dossierDispatched, setDossierDispatched] = useState(false);
 
-  // Light theme boundary detection on scroll
+  // Track scroll position to trigger clean transition to Light Theme
   useEffect(() => {
     const handleScroll = () => {
       const top = window.scrollY || document.documentElement.scrollTop;
@@ -85,8 +83,8 @@ export default function Home() {
       const pct = height > 0 ? top / height : 0;
       setScrollProgress(pct);
 
-      // Transition to light mode when scrolled past hero and unsheathe (~38% of page)
-      setIsLightMode(pct > 0.35);
+      // Light theme activates after the 3D Katana scroll journey (~42% of page)
+      setIsLightMode(pct > 0.42);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -122,22 +120,21 @@ export default function Home() {
     setDossierDispatched(false);
   };
 
-  // Parallax horizontal drift for watermark based on scroll
-  const watermarkX = (scrollProgress * 200).toFixed(1);
+  const watermarkX = (scrollProgress * 220).toFixed(1);
 
   return (
     <div className={`min-h-screen transition-colors duration-700 ${isLightMode ? "bg-[#e2dde3] text-[#14151a]" : "bg-[#0f1014] text-white"}`}>
       
-      {/* Real-time Telemetry HUD (0-100% Scroll & Sticky FPS/TOP Pill from Video) */}
+      {/* Real-time Telemetry HUD (0-100% Scroll & Left Sticky Pill) */}
       <TelemetryHUD isLightMode={isLightMode} />
 
-      {/* Floating Assistant Companion (AIKA / OJI widget from Video) */}
+      {/* Floating AI Companion (AIKA / OJI widget) */}
       <GuardianCompanion isLightMode={isLightMode} />
 
-      {/* Top Header (Matches Exact Video Header in frame_0000 / frame_0150 / frame_0400) */}
+      {/* Fixed Minimalist Header */}
       <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between">
         
-        {/* Brand & Red Vermilion Square Badge (Video Accurate) */}
+        {/* Brand & Red Vermilion Square Icon (Video Accurate) */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-[#e11d48] flex items-center justify-center text-white shadow-md">
             <Zap className="w-4 h-4 fill-white" />
@@ -160,12 +157,20 @@ export default function Home() {
             Overview
           </a>
           <a
-            href="#ladder"
+            href="#journey"
             className={`text-xs font-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
               isLightMode ? "pill-button-light" : "pill-button"
             }`}
           >
-            Kill Chain
+            5-Phase Blade
+          </a>
+          <a
+            href="#clarity"
+            className={`text-xs font-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              isLightMode ? "pill-button-light" : "pill-button"
+            }`}
+          >
+            Principles
           </a>
           <a
             href="#interceptor"
@@ -176,14 +181,6 @@ export default function Home() {
             Interceptor
           </a>
           <a
-            href="#warfare"
-            className={`text-xs font-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
-              isLightMode ? "pill-button-light" : "pill-button"
-            }`}
-          >
-            3D Radar
-          </a>
-          <a
             href="tel:1930"
             className="shimmer-pill-red text-xs font-mono font-bold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 cursor-pointer"
           >
@@ -192,28 +189,28 @@ export default function Home() {
           </a>
         </nav>
 
-        {/* Right Corner Spacer for the % Telemetry */}
+        {/* Spacer for top-right % indicator */}
         <div className="w-12 h-6" />
       </header>
 
       {/* =========================================================================
-          ACT 1: THE DARK OBSIDIAN REALM (#0f1014)
+          ACT 1: THE DARK OBSIDIAN REALM (#0f1014) - PURE NEGATIVE SPACE
           ========================================================================= */}
-      <section id="hero" className="min-h-screen pt-28 pb-16 px-6 relative flex flex-col justify-between overflow-hidden">
+      <section id="hero" className="min-h-screen pt-32 pb-16 px-6 sm:px-12 relative flex flex-col justify-between overflow-hidden">
         
-        {/* Giant Parallax Watermark Text (Video Accurate frame_0000 & frame_0150) */}
+        {/* Giant Parallax Watermark Text (Space Grotesk) */}
         <div 
-          className="absolute -top-6 left-0 right-0 overflow-hidden pointer-events-none select-none z-0"
+          className="absolute -top-8 left-0 right-0 overflow-hidden pointer-events-none select-none z-0"
           style={{ transform: `translate3d(-${watermarkX}px, 0, 0)` }}
         >
-          <span className="ghost-watermark-dark text-[22vw] leading-none block">
+          <span className="ghost-watermark-dark text-[22vw] leading-none block font-display">
             XORcall
           </span>
         </div>
 
-        {/* Hero Title Block (Video Accurate Typography) */}
-        <div className="relative z-10 max-w-4xl mt-6">
-          <div className="text-[10px] font-mono tracking-widest text-[#e11d48] font-bold uppercase mb-2">
+        {/* Minimalist Hero Title (Zero Clutter, Pure Space Grotesk) */}
+        <div className="relative z-10 max-w-4xl mt-12">
+          <div className="text-[11px] font-mono tracking-widest text-[#e11d48] font-bold uppercase mb-4">
             V_ 2.0.4 · AUTONOMOUS COGNITIVE DEFENSE
           </div>
           
@@ -222,7 +219,7 @@ export default function Home() {
             Your Safety
           </h1>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-8">
             <span className="text-xs font-mono text-slate-400">
               Built by Team KANYARASI · Colossus 3.0
             </span>
@@ -233,16 +230,9 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Central Dual Conductor Unsheathe (Video Katana Horizontal Parallax Metaphor) */}
-        <div className="relative z-10 my-8">
-          <DualConductorUnsheathe />
-        </div>
-
-        {/* Bottom Hero Telemetry Row */}
-        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-white/10 pt-4 text-[11px] font-mono text-slate-400">
-          <div className="flex items-center gap-4">
-            <span>FOR IN-CALL EXTORTION AND VOICE-CLONE NEUTRALIZATION</span>
-          </div>
+        {/* Bottom Hero Micro-Telemetry */}
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-t border-white/10 pt-4 text-[11px] font-mono text-slate-400 mt-20">
+          <div>FOR IN-CALL EXTORTION AND VOICE-CLONE NEUTRALIZATION</div>
           <div className="flex items-center gap-3">
             <span className="text-white font-bold">&lt;300MS COGNITIVE SPEED</span>
             <span>·</span>
@@ -252,77 +242,87 @@ export default function Home() {
       </section>
 
       {/* =========================================================================
+          THE 3D CYBER KATANA 5-PHASE SCROLL JOURNEY (PURE NEGATIVE SPACE)
+          ========================================================================= */}
+      <section id="journey" className="w-full relative">
+        <KatanaScrollJourney />
+      </section>
+
+      {/* =========================================================================
           ACT 2: TRANSITION TO WARM ARCHITECTURAL BONE / CHALK THEME (#e2dde3)
+          Exact match to user reference image (media_1794570774157_1235ccf2.png)
           ========================================================================= */}
       <div className="w-full transition-colors duration-700 bg-[#e2dde3] text-[#14151a]">
         
-        {/* Section: Word Blur-Morph (Accurate to Video frame_0481 & frame_0500) */}
-        <section id="ladder" className="relative border-t border-black/10 overflow-hidden">
+        {/* Section: "Defend With Clarity" (Exact replication of user screenshot) */}
+        <section id="clarity" className="min-h-screen pt-32 pb-24 px-8 sm:px-16 max-w-7xl mx-auto flex flex-col justify-between relative border-t border-black/10">
           
-          {/* Header Block (Exact styling from frame_0481 "Code With Clarity") */}
-          <div className="pt-20 px-8 max-w-6xl mx-auto flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
+          {/* Top Row: Large Display Title + Small Right Label */}
+          <div className="flex flex-col md:flex-row items-start md:items-start justify-between gap-8">
             <div>
-              <h2 className="font-display text-4xl sm:text-6xl font-black tracking-tight text-[#14151a] leading-none">
+              <h2 className="font-display text-6xl sm:text-7xl md:text-8xl font-black tracking-tight text-[#14151a] leading-[0.95]">
                 Defend <br />
-                With Clarity
+                With <br />
+                Clarity
               </h2>
             </div>
-            <div className="text-[11px] font-mono tracking-widest text-[#70717b] uppercase max-w-xs">
+
+            <div className="text-[11px] font-mono tracking-widest text-[#70717b] uppercase max-w-xs mt-3 leading-relaxed">
               BUILT TO TUNE YOUR SAFETY, <br />
               NOT FIGHT YOUR PHONE LINE
             </div>
           </div>
 
-          {/* Kinetic Center Blur Morphing Words */}
-          <WordBlurMorph />
+          {/* Centerpiece: Clean Negative Space Symbol (Replicating user image "( べ )") */}
+          <div className="my-24 flex items-center justify-center">
+            <span className="font-display text-5xl sm:text-7xl font-bold text-[#14151a]/80 tracking-widest">
+              ( べ )
+            </span>
+          </div>
 
-          {/* 4-Column Numbered Layout (Exact replication of frame_0481 & frame_0500) */}
-          <div className="max-w-6xl mx-auto px-8 pb-24 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 border-t border-black/10 pt-12">
+          {/* 4-Column Numbered Layout (1), (2), (3), (4) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 border-t border-black/10 pt-12">
             <div>
-              <div className="text-xs font-mono text-[#70717b] mb-2">(1)</div>
-              <h3 className="text-base font-bold text-[#14151a] mb-2">Native Inference</h3>
-              <p className="text-xs text-[#555660] leading-relaxed">
+              <div className="text-xs font-mono text-[#70717b] mb-3">(1)</div>
+              <p className="text-xs text-[#555660] leading-relaxed font-sans">
                 Uses native on-device Sherpa-ONNX streaming Zipformer, refined by a precision mathematical formula.
               </p>
             </div>
 
             <div>
-              <div className="text-xs font-mono text-[#70717b] mb-2">(2)</div>
-              <h3 className="text-base font-bold text-[#14151a] mb-2">Zero-Cloud Privacy</h3>
-              <p className="text-xs text-[#555660] leading-relaxed">
+              <div className="text-xs font-mono text-[#70717b] mb-3">(2)</div>
+              <p className="text-xs text-[#555660] leading-relaxed font-sans">
                 Designed with a lightweight offline architecture that lets zero audio stream to remote servers.
               </p>
             </div>
 
             <div>
-              <div className="text-xs font-mono text-[#70717b] mb-2">(3)</div>
-              <h3 className="text-base font-bold text-[#14151a] mb-2">Modular Defenses</h3>
-              <p className="text-xs text-[#555660] leading-relaxed">
+              <div className="text-xs font-mono text-[#70717b] mb-3">(3)</div>
+              <p className="text-xs text-[#555660] leading-relaxed font-sans">
                 Configure behavior directly in markup with modular controls — no vibration required until you really want it.
               </p>
             </div>
 
             <div>
-              <div className="text-xs font-mono text-[#70717b] mb-2">(4)</div>
-              <h3 className="text-base font-bold text-[#14151a] mb-2">Forensics Dossier</h3>
-              <p className="text-xs text-[#555660] leading-relaxed">
+              <div className="text-xs font-mono text-[#70717b] mb-3">(4)</div>
+              <p className="text-xs text-[#555660] leading-relaxed font-sans">
                 Built for BSA-compliant digital forensics packaging, open to instant 1-click dispatch to 1930 / I4C.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Section: Streamlined Real-Time Interceptor Console */}
-        <section id="interceptor" className="py-20 px-6 max-w-5xl mx-auto border-t border-black/10">
+        {/* Section: Frameless Interceptor Console (Light & Clean) */}
+        <section id="interceptor" className="py-20 px-8 max-w-5xl mx-auto border-t border-black/10">
           <div className="text-center mb-10">
-            <span className="text-xs font-mono font-bold uppercase tracking-widest text-red-600">
+            <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#e11d48]">
               [ REAL-TIME COGNITIVE DEFENSE ]
             </span>
-            <h2 className="font-display text-3xl sm:text-5xl font-black text-[#14151a] mt-1">
+            <h2 className="font-display text-4xl sm:text-5xl font-black text-[#14151a] mt-2">
               Autonomous Interceptor
             </h2>
             <p className="text-xs sm:text-sm text-[#70717b] max-w-md mx-auto mt-2">
-              Select a scam vector below and trigger on-device speech interception in real time.
+              Select a scam vector below and run real-time speech interception.
             </p>
           </div>
 
@@ -348,7 +348,7 @@ export default function Home() {
           </div>
 
           {/* Minimalist Interceptor Console Box */}
-          <div className="bg-white/80 rounded-3xl p-6 sm:p-8 border border-black/10 shadow-xl backdrop-blur-md">
+          <div className="bg-white/90 rounded-3xl p-6 sm:p-8 border border-black/10 shadow-xl backdrop-blur-md">
             
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-black/10">
               <div className="flex items-center gap-3">
@@ -438,21 +438,21 @@ export default function Home() {
         </section>
 
         {/* Section: Modular Sensory Interventions (Judge Critique #3) */}
-        <section className="py-16 px-6 max-w-5xl mx-auto border-t border-black/10">
+        <section className="py-16 px-8 max-w-5xl mx-auto border-t border-black/10">
           <div className="mb-8">
             <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#70717b]">
               [ JUDGE CRITIQUE #3 RESOLUTION ]
             </span>
-            <h2 className="font-display text-2xl sm:text-3xl font-black text-[#14151a] mt-1">
+            <h3 className="font-display text-2xl font-black text-[#14151a] mt-1">
               Modular Sensory Interventions
-            </h2>
+            </h3>
             <p className="text-xs text-[#70717b] mt-1">
               Taptic Cheek Haptics default to OFF for vibration-averse users. Choose from In-Ear Whisper or Screen Overlay.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white/80 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
+            <div className="bg-white/90 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Vibrate className="w-5 h-5 text-amber-600" />
@@ -471,7 +471,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="bg-white/80 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
+            <div className="bg-white/90 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Volume2 className="w-5 h-5 text-cyan-600" />
@@ -490,7 +490,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="bg-white/80 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
+            <div className="bg-white/90 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <Eye className="w-5 h-5 text-emerald-600" />
@@ -509,7 +509,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="bg-white/80 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
+            <div className="bg-white/90 rounded-2xl p-5 border border-black/10 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <UserCheck className="w-5 h-5 text-blue-600" />
@@ -533,8 +533,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Section: 3D Cyber Warfare War Room */}
-        <section id="warfare" className="py-16 px-6 max-w-5xl mx-auto border-t border-black/10">
+        {/* Section: 3D Cyber Warfare Matrix */}
+        <section id="warfare" className="py-16 px-8 max-w-5xl mx-auto border-t border-black/10">
           <div className="bg-[#0f1014] text-white rounded-3xl p-6 sm:p-8 border border-black/20 overflow-hidden shadow-2xl">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
               <div>
@@ -556,61 +556,16 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Section: Community Proof (r/developersIndia 2.8k Upvotes) */}
-        <section className="py-16 px-6 max-w-5xl mx-auto border-t border-black/10">
-          <div className="bg-white/80 rounded-3xl p-6 sm:p-8 border border-black/10">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-              <div>
-                <span className="text-xs font-mono font-bold uppercase tracking-widest text-orange-600">
-                  [ STAKEHOLDER ACCEPTANCE DATA ]
-                </span>
-                <h3 className="font-display text-2xl font-black text-[#14151a] mt-1">
-                  Validated Across 2,800+ Engineers &amp; Parents
-                </h3>
-              </div>
-              <span className="text-xs font-mono font-bold text-orange-700 bg-orange-100 px-3 py-1 rounded-full">
-                r/developersIndia · 2,847 UPVOTES
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-2xl bg-[#ede8e3] border border-black/5">
-                <div className="text-xs font-mono text-[#70717b]">STUDENTS &amp; YOUTH</div>
-                <div className="text-xl font-black text-[#14151a] mt-1">94.8% Approval</div>
-                <p className="text-xs text-[#555660] mt-2">
-                  Demanded Telegram task-scam and campus fee phishing interception.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#ede8e3] border border-black/5">
-                <div className="text-xs font-mono text-[#70717b]">PARENTS &amp; SENIORS</div>
-                <div className="text-xl font-black text-[#14151a] mt-1">98.2% Trust</div>
-                <p className="text-xs text-[#555660] mt-2">
-                  Praised Out-of-band safe heartbeat ping to debunk voice-clone kidnappings.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#ede8e3] border border-black/5">
-                <div className="text-xs font-mono text-[#70717b]">WORKING PROFESSIONALS</div>
-                <div className="text-xl font-black text-[#14151a] mt-1">91.6% Fit</div>
-                <p className="text-xs text-[#555660] mt-2">
-                  Adopted AnyDesk remote watchdog blocker against wire-transfer trojans.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Minimal Footer */}
-        <footer className="border-t border-black/10 py-10 px-6 text-xs font-mono text-[#70717b] max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Minimalist Light Footer */}
+        <footer className="border-t border-black/10 py-10 px-8 text-xs font-mono text-[#70717b] max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="font-bold text-[#14151a]">XORcall · Kavach Neural Guardian</span>
             <span>·</span>
             <span>Team KANYARASI</span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <a href="tel:1930" className="text-red-600 font-bold hover:underline flex items-center gap-1.5">
+          <div>
+            <a href="tel:1930" className="text-[#e11d48] font-bold hover:underline flex items-center gap-1.5">
               <PhoneCall className="w-3.5 h-3.5" />
               <span>National Cybercrime Helpline: 1930</span>
             </a>
