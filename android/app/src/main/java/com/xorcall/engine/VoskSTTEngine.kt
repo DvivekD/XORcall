@@ -8,17 +8,19 @@ import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.*
+import java.util.zip.ZipInputStream
 
 /**
  * VoskSTTEngine — True On-Device Speech-to-Text Engine (Singleton)
- * 100% offline speech recognition using the bundled Vosk model from APK assets.
+ * 100% offline speech recognition using the bundled model-en.zip from APK assets.
  * No internet required. Works DURING active phone calls on Android 14.
  */
 class VoskSTTEngine private constructor(private val context: Context) {
 
     companion object {
         private const val TAG = "VoskSTT"
-        private const val ASSET_MODEL_NAME = "model-en"
+        private const val ASSET_ZIP_NAME = "model-en.zip"
+        private const val MODEL_FOLDER_NAME = "model-en"
         private const val SAMPLE_RATE = 16000f
 
         @Volatile
@@ -47,15 +49,14 @@ class VoskSTTEngine private constructor(private val context: Context) {
     var onError: ((String) -> Unit)? = null
 
     private val targetModelDir: File
-        get() = File(context.filesDir, ASSET_MODEL_NAME)
+        get() = File(context.filesDir, MODEL_FOLDER_NAME)
 
     fun isModelExtracted(): Boolean {
-        val dir = targetModelDir
-        return dir.exists() && (File(dir, "am").exists() || File(dir, "conf").exists() || (dir.listFiles()?.isNotEmpty() == true))
+        return findModelDir(targetModelDir) != null
     }
 
     /**
-     * Initializes Vosk model by unpacking from APK assets (if not already unpacked)
+     * Initializes Vosk model by extracting model-en.zip from APK assets (if not already done)
      * and loading the native Model + Recognizer into memory.
      */
     fun initialize(scope: CoroutineScope? = null) {
@@ -66,13 +67,13 @@ class VoskSTTEngine private constructor(private val context: Context) {
             try {
                 if (!isModelExtracted()) {
                     isUnpacking = true
-                    Log.i(TAG, "Unpacking bundled offline Vosk model from assets...")
-                    unpackAssetFolder(context.assets, ASSET_MODEL_NAME, targetModelDir)
+                    Log.i(TAG, "Extracting bundled offline Vosk model zip from assets...")
+                    extractModelZipFromAssets(context.assets, ASSET_ZIP_NAME, targetModelDir)
                     isUnpacking = false
-                    Log.i(TAG, "Vosk model successfully unpacked to ${targetModelDir.absolutePath}")
+                    Log.i(TAG, "Vosk model successfully extracted to ${targetModelDir.absolutePath}")
                 }
 
-                // Locate actual model directory (handles nested folders if any)
+                // Locate actual model directory (handles nested folders inside zip)
                 val modelPath = findModelDir(targetModelDir)
                 if (modelPath != null) {
                     model = Model(modelPath.absolutePath)
@@ -85,7 +86,7 @@ class VoskSTTEngine private constructor(private val context: Context) {
                         onModelReady?.invoke()
                     }
                 } else {
-                    Log.e(TAG, "Model directory not found after unpacking")
+                    Log.e(TAG, "Model directory not found after extraction")
                     onError?.invoke("Model files missing in assets")
                 }
             } catch (e: Exception) {
@@ -97,34 +98,41 @@ class VoskSTTEngine private constructor(private val context: Context) {
     }
 
     private fun findModelDir(baseDir: File): File? {
+        if (!baseDir.exists()) return null
         if (File(baseDir, "am").exists() || File(baseDir, "conf").exists()) return baseDir
         baseDir.listFiles()?.forEach { sub ->
             if (sub.isDirectory && (File(sub, "am").exists() || File(sub, "conf").exists())) {
                 return sub
             }
         }
-        if (baseDir.exists() && baseDir.isDirectory && (baseDir.listFiles()?.isNotEmpty() == true)) {
+        if (baseDir.isDirectory && (baseDir.listFiles()?.isNotEmpty() == true)) {
             return baseDir
         }
         return null
     }
 
-    private fun unpackAssetFolder(assetManager: AssetManager, sourcePath: String, targetDir: File) {
-        val list = assetManager.list(sourcePath)
-        if (list.isNullOrEmpty()) {
-            // It's a file
-            targetDir.parentFile?.mkdirs()
-            assetManager.open(sourcePath).use { input ->
-                FileOutputStream(targetDir).use { output ->
-                    input.copyTo(output)
+    private fun extractModelZipFromAssets(assetManager: AssetManager, zipAssetName: String, destDir: File) {
+        destDir.mkdirs()
+        assetManager.open(zipAssetName).use { inputStream ->
+            ZipInputStream(BufferedInputStream(inputStream)).use { zis ->
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    val outFile = File(destDir, entry.name)
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        FileOutputStream(outFile).use { fos ->
+                            val buffer = ByteArray(8192)
+                            var len: Int
+                            while (zis.read(buffer).also { len = it } > 0) {
+                                fos.write(buffer, 0, len)
+                            }
+                        }
+                    }
+                    zis.closeEntry()
+                    entry = zis.nextEntry
                 }
-            }
-        } else {
-            // It's a directory
-            targetDir.mkdirs()
-            for (file in list) {
-                val subSource = if (sourcePath.isEmpty()) file else "$sourcePath/$file"
-                unpackAssetFolder(assetManager, subSource, File(targetDir, file))
             }
         }
     }

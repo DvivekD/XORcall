@@ -12,13 +12,17 @@ android {
         applicationId = "com.xorcall"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.0.8"
+        versionCode = 10
+        versionName = "1.0.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86"))
+            abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a"))
         }
+    }
+
+    androidResources {
+        noCompress.addAll(listOf("zip"))
     }
 
     buildTypes {

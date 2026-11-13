@@ -1251,7 +1251,7 @@ fun HeaderSection() {
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Text(
-                text = "v1.0.8-PROD",
+                text = "v1.0.9-PROD",
                 color = Color(0xFF94A3B8),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace
