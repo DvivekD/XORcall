@@ -16,6 +16,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.xorcall.engine.*
@@ -30,9 +31,9 @@ import kotlin.math.tanh
 /**
  * CallMonitorService
  * Autonomous In-Call Cyber Guardian Service with:
- * - Direct In-Call Audio Output Interception (Earpiece Downlink + Mic Uplink)
- * - Hardware Digital AGC Pre-Amplifier (+24dB dynamic boost with soft tanh limiter)
- * - Multi-Demographic Lexicon Interception (Universal, Student, Senior, Corporate Professional)
+ * - Direct In-Call Audio Output Interception (Direct Telephony Stream: VOICE_CALL / VOICE_COMMUNICATION / VOICE_DOWNLINK)
+ * - Hardware Digital AGC Pre-Amplifier (+20dB dynamic boost with soft tanh limiter)
+ * - Multi-Demographic Lexicon Interception (Universal Extortion, Student, Senior, Corporate Professional)
  * - Neural Acoustic AI Voice Clone & Vocoder Detector
  * - Proximity-aware sensory Taptic Haptics shockwave
  * - Discreet In-Ear Audio Whisper Alert (TextToSpeech)
@@ -40,6 +41,11 @@ import kotlin.math.tanh
  * - Persistent BSA Section 63 forensic logging
  */
 class CallMonitorService : Service(), TelemetryListener {
+
+    companion object {
+        private const val TAG = "CallMonitorService"
+        const val ACTION_TOGGLE_SPEAKER = "com.xorcall.TOGGLE_SPEAKERPHONE"
+    }
 
     private val CHANNEL_ID = "XORcall_Guardian_Channel"
     private val NOTIFICATION_ID = 1001
@@ -58,9 +64,12 @@ class CallMonitorService : Service(), TelemetryListener {
     private var currentCallerNumber: String = "Unknown Caller"
     private var currentCallerClassification: String = "UNKNOWN"
     private var isCallActive: Boolean = false
+    private var currentAudioSourceName: String = "STANDBY"
 
     private var audioRecord: AudioRecord? = null
+    @Volatile
     private var isRecording = false
+    private var recordingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private val sampleRate = 16000
@@ -70,8 +79,9 @@ class CallMonitorService : Service(), TelemetryListener {
 
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == GuardianSettingsManager.ACTION_SETTINGS_CHANGED) {
-                reloadSettings()
+            when (intent?.action) {
+                GuardianSettingsManager.ACTION_SETTINGS_CHANGED -> reloadSettings()
+                ACTION_TOGGLE_SPEAKER -> toggleSpeakerphone()
             }
         }
     }
@@ -112,8 +122,11 @@ class CallMonitorService : Service(), TelemetryListener {
             floatingOverlay = FloatingAlertOverlay(this)
             packageWatchdog = PackageWatchdog(this)
 
-            // Register dynamic receiver for real-time settings changes
-            val filter = IntentFilter(GuardianSettingsManager.ACTION_SETTINGS_CHANGED)
+            // Register dynamic receiver for real-time settings and speaker toggles
+            val filter = IntentFilter().apply {
+                addAction(GuardianSettingsManager.ACTION_SETTINGS_CHANGED)
+                addAction(ACTION_TOGGLE_SPEAKER)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(settingsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
             } else {
@@ -121,7 +134,7 @@ class CallMonitorService : Service(), TelemetryListener {
             }
 
             createNotificationChannel()
-            val notification = buildForegroundNotification("Kavach Shield Active - Intercepting Call Audio Stream")
+            val notification = buildForegroundNotification("Kavach Shield Active - Ready to Intercept Call Audio")
 
             val hasMicPermission = ContextCompat.checkSelfPermission(
                 this,
@@ -143,7 +156,7 @@ class CallMonitorService : Service(), TelemetryListener {
             }
 
             if (hasMicPermission) {
-                startAudioCapture()
+                startAudioCapture(isCallOngoing = false)
             }
             startWatchdogLoop()
         } catch (e: Exception) {
@@ -154,6 +167,20 @@ class CallMonitorService : Service(), TelemetryListener {
     private fun reloadSettings() {
         hapticEngine.isHapticsEnabled = settingsManager.isHapticsEnabled
         sttManager.activeScope = settingsManager.activeVector
+    }
+
+    private fun toggleSpeakerphone() {
+        try {
+            val newState = !audioManager.isSpeakerphoneOn
+            audioManager.isSpeakerphoneOn = newState
+            val intent = Intent("com.xorcall.SPEAKER_STATE").apply {
+                putExtra("isSpeakerOn", newState)
+                setPackage(packageName)
+            }
+            sendBroadcast(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to toggle speakerphone", e)
+        }
     }
 
     private fun handleThreatDetected(analysis: ThreatAnalysis, transcript: String) {
@@ -212,17 +239,25 @@ class CallMonitorService : Service(), TelemetryListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent?.getStringExtra("EXTRA_INCOMING_NUMBER")?.let {
             currentCallerNumber = it
-            isCallActive = true
         }
         intent?.getStringExtra("EXTRA_CLASSIFICATION")?.let {
             currentCallerClassification = it
         }
-        intent?.getStringExtra("EXTRA_CALL_STATE")?.let { state ->
-            if (state == "IDLE") {
-                isCallActive = false
-                currentCallerNumber = "Standby (Shield Armed)"
-            }
+
+        val callState = intent?.getStringExtra("EXTRA_CALL_STATE")
+        val isAccessibilityIntercept = intent?.getBooleanExtra("EXTRA_ACCESSIBILITY_INTERCEPT", false) ?: false
+
+        if (callState == "OFFHOOK" || isAccessibilityIntercept) {
+            isCallActive = true
+            Log.i(TAG, "Call connected (OFFHOOK): Engaging Direct In-Call Audio Capture")
+            startAudioCapture(isCallOngoing = true)
+        } else if (callState == "IDLE") {
+            isCallActive = false
+            currentCallerNumber = "Standby (Shield Armed)"
+            Log.i(TAG, "Call ended (IDLE): Returning to Standby Audio Capture")
+            startAudioCapture(isCallOngoing = false)
         }
+
         intent?.getStringExtra("EXTRA_VECTOR_SCOPE")?.let { scopeName ->
             try {
                 val vector = DemographicVector.valueOf(scopeName)
@@ -243,89 +278,138 @@ class CallMonitorService : Service(), TelemetryListener {
         return START_STICKY
     }
 
-    private fun startAudioCapture() {
+    private fun startAudioCapture(isCallOngoing: Boolean) {
         val hasMicPermission = ContextCompat.checkSelfPermission(
             this,
             android.Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
         if (!hasMicPermission) return
 
-        // Start Hardware Direct In-Call Audio Stream with Digital AGC Pre-Amplifier
-        startHardwareAudioRecordLoop()
+        // Clean up any ongoing recording loop before binding the new in-call session
+        stopAudioCaptureInternal()
+
+        startHardwareAudioRecordLoop(isCallOngoing)
+    }
+
+    private fun stopAudioCaptureInternal() {
+        isRecording = false
+        recordingJob?.cancel()
+        recordingJob = null
+        try {
+            audioRecord?.stop()
+            audioRecord?.release()
+        } catch (_: Exception) {}
+        audioRecord = null
     }
 
     /**
      * Direct In-Call Audio Output Interception Loop
-     * Ingests duplex telephony stream directly via AudioRecord(VOICE_COMMUNICATION)
-     * and applies an Adaptive Digital Pre-Amplifier (+24dB boost) with hyperbolic tangent soft limiter.
-     * This captures the remote caller's earpiece downlink audio directly without requiring manual speakerphone.
+     * Direct hardware audio capture prioritizing:
+     * 1. MediaRecorder.AudioSource.VOICE_CALL (4: Hardware modem duplex line - uplink + downlink)
+     * 2. MediaRecorder.AudioSource.VOICE_COMMUNICATION (7: Echo-canceled duplex stream)
+     * 3. MediaRecorder.AudioSource.VOICE_DOWNLINK (3: Remote party caller audio)
+     * 4. MediaRecorder.AudioSource.VOICE_RECOGNITION (6)
+     * 5. MediaRecorder.AudioSource.MIC (1)
      */
-    private fun startHardwareAudioRecordLoop() {
-        if (isRecording) return
-
-        scope.launch(Dispatchers.IO) {
+    private fun startHardwareAudioRecordLoop(isCallOngoing: Boolean) {
+        recordingJob = scope.launch(Dispatchers.IO) {
             try {
-                // Elevate system audio routing to duplex communication
-                try {
-                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                } catch (_: Exception) {}
+                if (isCallOngoing) {
+                    try {
+                        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    } catch (_: Exception) {}
+                }
 
-                // Priority 1: VOICE_COMMUNICATION (duplex hardware mixer)
-                // Priority 2: VOICE_RECOGNITION
-                // Priority 3: MIC
-                val audioSources = listOf(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                    MediaRecorder.AudioSource.MIC
+                val inCallSources = listOf(
+                    Pair(MediaRecorder.AudioSource.VOICE_CALL, "VOICE_CALL (Direct Line)"),
+                    Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex)"),
+                    Pair(MediaRecorder.AudioSource.VOICE_DOWNLINK, "VOICE_DOWNLINK (Remote Caller)"),
+                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
+                    Pair(MediaRecorder.AudioSource.MIC, "MIC"),
+                    Pair(MediaRecorder.AudioSource.DEFAULT, "DEFAULT")
                 )
 
-                for (source in audioSources) {
+                val standbySources = listOf(
+                    Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex)"),
+                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
+                    Pair(MediaRecorder.AudioSource.MIC, "MIC"),
+                    Pair(MediaRecorder.AudioSource.DEFAULT, "DEFAULT")
+                )
+
+                val sourcesToTry = if (isCallOngoing) inCallSources else standbySources
+                var selectedSource = MediaRecorder.AudioSource.MIC
+                var selectedName = "MIC"
+
+                for ((source, name) in sourcesToTry) {
                     try {
-                        audioRecord = AudioRecord(source, sampleRate, channelConfig, audioFormat, bufferSize)
-                        if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
+                        val record = AudioRecord(source, sampleRate, channelConfig, audioFormat, bufferSize)
+                        if (record.state == AudioRecord.STATE_INITIALIZED) {
+                            audioRecord = record
+                            selectedSource = source
+                            selectedName = name
+                            currentAudioSourceName = name
+                            Log.i(TAG, "AudioRecord successfully initialized with source: $name ($source)")
                             break
                         } else {
-                            audioRecord?.release()
-                            audioRecord = null
+                            record.release()
                         }
-                    } catch (_: Exception) {
-                        audioRecord = null
+                    } catch (e: Exception) {
+                        Log.w(TAG, "AudioSource $name ($source) failed: ${e.message}")
                     }
                 }
 
-                if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
-                    audioRecord?.startRecording()
+                val record = audioRecord
+                if (record != null && record.state == AudioRecord.STATE_INITIALIZED) {
+                    record.startRecording()
                     isRecording = true
 
                     val pcmBuffer = ShortArray(bufferSize / 2)
-                    while (isRecording && isActive) {
-                        val readCount = audioRecord?.read(pcmBuffer, 0, pcmBuffer.size) ?: 0
-                        if (readCount > 0) {
-                            // Feed RAW PCM ShortArray directly to on-device Vosk STT + Acoustic AI Voice engine
-                            sttManager.acceptAudioChunkRaw(pcmBuffer, readCount)
+                    val boostedBuffer = ShortArray(bufferSize / 2)
+                    // Hardware Digital AGC Pre-Amplifier: +20dB boost (gain factor ~7.5) with soft saturation limiter
+                    val digitalGain = 7.5f
 
-                            // Measure incoming RMS energy
+                    while (isRecording && isActive) {
+                        val readCount = record.read(pcmBuffer, 0, pcmBuffer.size)
+                        if (readCount > 0) {
                             var sumSquares = 0.0
                             for (i in 0 until readCount) {
-                                val s = pcmBuffer[i].toDouble()
-                                sumSquares += s * s
+                                val rawSample = pcmBuffer[i].toFloat() / 32768.0f
+                                // Soft-saturation limiter
+                                val amplified = tanh(rawSample * digitalGain)
+                                val finalSample = (amplified * 32767.0f).toInt().coerceIn(-32768, 32767).toShort()
+                                boostedBuffer[i] = finalSample
+                                sumSquares += finalSample.toDouble() * finalSample.toDouble()
                             }
-                            val rms = sqrt(sumSquares / readCount) / 32768.0
 
-                            // If voice activity is sustained, broadcast live audio level to UI
-                            if (rms > 0.015) {
+                            // Feed boosted PCM directly to on-device Vosk STT + Acoustic AI Voice engine
+                            sttManager.acceptAudioChunkRaw(boostedBuffer, readCount)
+
+                            val rms = sqrt(sumSquares / readCount) / 32768.0
+                            if (rms > 0.008) {
                                 val transcriptIntent = Intent("com.xorcall.AUDIO_STREAM_ACTIVE").apply {
                                     putExtra("rms", rms.toFloat())
-                                    putExtra("isDownlinkActive", true)
+                                    putExtra("isDownlinkActive", isCallOngoing)
+                                    putExtra("source", selectedName)
                                     setPackage(packageName)
                                 }
                                 sendBroadcast(transcriptIntent)
                             }
+                        } else if (readCount < 0) {
+                            delay(100)
                         }
                     }
+                } else {
+                    Log.e(TAG, "All AudioRecord sources failed to initialize.")
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Audio capture loop exception", e)
+            } finally {
+                try {
+                    audioRecord?.stop()
+                    audioRecord?.release()
+                } catch (_: Exception) {}
+                audioRecord = null
+                isRecording = false
             }
         }
     }
@@ -358,63 +442,60 @@ class CallMonitorService : Service(), TelemetryListener {
             else -> RiskLevel.SAFE
         }
 
-        hapticEngine.updateRiskLevel(level)
-
-        if (level == RiskLevel.CRITICAL && settingsManager.isBannerEnabled) {
-            val summary = json.optString("vernacular_summary", "No police agency arrests anyone by video call. Hang up.")
-            scope.launch(Dispatchers.Main) {
-                floatingOverlay.showCriticalAlert(summary)
-            }
+        val message = json.optString("summary", "Incoming telemetry alert")
+        val transcript = json.optString("transcript", "")
+        if (level == RiskLevel.CRITICAL || level == RiskLevel.WARN) {
+            handleThreatDetected(
+                ThreatAnalysis(
+                    isScamDetected = true,
+                    matchedKeywords = listOf("TELEMETRY_INTERCEPT"),
+                    riskLevel = level,
+                    warningMessage = message,
+                    demographicVector = settingsManager.activeVector,
+                    normalizedTranscript = transcript
+                ),
+                transcript
+            )
         }
     }
-
-    override fun onConnectionStateChanged(isConnected: Boolean) {}
-
-    override fun onDestroy() {
-        super.onDestroy()
-        isRecording = false
-        try {
-            unregisterReceiver(settingsReceiver)
-        } catch (_: Exception) {}
-
-        try {
-            audioRecord?.stop()
-            audioRecord?.release()
-        } catch (_: Exception) {}
-        audioRecord = null
-
-        try {
-            audioManager.mode = AudioManager.MODE_NORMAL
-        } catch (_: Exception) {}
-
-        sttManager.release()
-        whisperEngine.shutdown()
-        hapticEngine.stopListening()
-        floatingOverlay.dismiss()
-        webSocketClient?.disconnect()
-        scope.cancel()
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "XORcall In-Call Protection",
+                "XORcall Cyber Safety Guardian Service",
                 NotificationManager.IMPORTANCE_LOW
-            )
+            ).apply {
+                description = "Monitors live telephony audio stream for violent extortion, kidnap, and cyber fraud"
+            }
             val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
+            manager.createNotificationChannel(channel)
         }
     }
 
-    private fun buildForegroundNotification(content: String): Notification {
+    private fun buildForegroundNotification(contentText: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("XORcall Cyber Safety")
-            .setContentText(content)
+            .setContentTitle("XORcall Autonomous Cyber Shield")
+            .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
             .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(settingsReceiver)
+        } catch (_: Exception) {}
+        stopAudioCaptureInternal()
+        hapticEngine.stopListening()
+        whisperEngine.shutdown()
+        floatingOverlay.dismissOverlay()
+        webSocketClient?.disconnect()
+        sttManager.release()
+        scope.cancel()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
 }

@@ -32,14 +32,15 @@ object DemographicThreatLexicon {
         "son", "daughter", "child", "children", "kid", "kids", "brother", "sister", "mother", "father", "family",
         "kidnap", "kidnapped", "kidnapping", "hostage", "abduct", "abducted", "in our custody", "in custody",
         
-        // Currency & High-Denomination Demands
-        "5 lakhs", "lakh", "lakhs", "500000", "crore", "crores", "rupees", "cash", "ransom",
+        // Currency & High-Denomination Demands (including phonetic mappings from US English STT)
+        "5 lakhs", "5 lakh", "five lakh", "five lakhs", "5 lacks", "five lacks", "5 lock", "five lock", "5 luck", "five luck",
+        "lakh", "lakhs", "lack", "lacks", "lock", "locks", "500000", "crore", "crores", "rupees", "cash", "ransom",
         "million dollar", "million dollars", "5 million", "million", "millions", "dollar", "dollars",
-        "extraction", "extract money", "extortion", "extort",
+        "extraction", "extract money", "extortion", "extort", "blackmail",
 
         // Accident & Urgent Hospital Coercion
-        "accident", "critical condition", "hospitalized", "icu", "emergency surgery",
-        "police custody", "bail money", "bail amount", "custody release",
+        "accident", "critical condition", "hospitalized", "hospital", "icu", "emergency surgery",
+        "police custody", "bail money", "bail amount", "custody release", "police", "arrest",
 
         // Forceful Transfer & Ultimatums
         "wire transfer", "transfer immediately", "pay immediately", "send money now",
@@ -94,14 +95,20 @@ object DemographicThreatLexicon {
     /**
      * Evaluates text against a specific demographic scope or ALL scopes.
      * Universal extortion markers are always evaluated regardless of chosen persona.
+     * Incorporates PhoneticSpeechNormalizer to resolve US English acoustic variations.
      */
     fun evaluate(text: String, scope: DemographicVector = DemographicVector.ALL): VectorThreatResult {
         val lower = text.lowercase().replace("\n", " ").trim()
+        val norm = PhoneticSpeechNormalizer.normalize(text)
 
-        val universalMatches = UNIVERSAL_EXTORTION_KEYWORDS.filter { lower.contains(it) }
-        val studentMatches = STUDENT_KEYWORDS.filter { lower.contains(it) }
-        val seniorMatches = SENIOR_KEYWORDS.filter { lower.contains(it) }
-        val profMatches = PROFESSIONAL_KEYWORDS.filter { lower.contains(it) }
+        val matchInBoth = { keyword: String ->
+            lower.contains(keyword) || norm.contains(keyword)
+        }
+
+        val universalMatches = UNIVERSAL_EXTORTION_KEYWORDS.filter { matchInBoth(it) }
+        val studentMatches = STUDENT_KEYWORDS.filter { matchInBoth(it) }
+        val seniorMatches = SENIOR_KEYWORDS.filter { matchInBoth(it) }
+        val profMatches = PROFESSIONAL_KEYWORDS.filter { matchInBoth(it) }
 
         // Assemble active matches based on scope
         val activeMatches = when (scope) {
@@ -125,16 +132,17 @@ object DemographicThreatLexicon {
 
         // High-severity markers trigger CRITICAL immediately on the first phrase
         val criticalTriggers = listOf(
-            "kill", "killing", "murder", "son", "daughter", "kidnap", "kidnapped", "hostage", "5 lakhs", "lakh",
-            "million dollar", "million dollars", "extraction", "extort", "ransom", "accident",
+            "kill", "killing", "murder", "son", "daughter", "kidnap", "kidnapped", "hostage",
+            "5 lakhs", "5 lakh", "five lakh", "five lakhs", "lakh", "lakhs", "500000",
+            "million dollar", "million dollars", "extraction", "extort", "extortion", "ransom", "accident",
             "digital arrest", "rbi escrow", "liquidate fixed deposit", "break fd", "arrest warrant",
             "semester fee", "crypto recharge", "recharge wallet", "viral on instagram", "video call recording",
-            "parcel intercepted", "fedex", "trai", "mobile disconnection", "income tax raid"
+            "parcel intercepted", "fedex", "trai", "mobile disconnection", "income tax raid", "cbi"
         )
 
         val hasCriticalKeyword = activeMatches.any { match ->
             criticalTriggers.any { trigger -> match.contains(trigger) || trigger.contains(match) }
-        }
+        } || PhoneticSpeechNormalizer.containsHighSeverityMarker(text)
 
         val risk = when {
             hasCriticalKeyword || activeMatches.isNotEmpty() -> RiskLevel.CRITICAL
@@ -143,7 +151,7 @@ object DemographicThreatLexicon {
 
         val summary = when (risk) {
             RiskLevel.CRITICAL -> {
-                val sample = activeMatches.take(3).joinToString(", ")
+                val sample = activeMatches.ifEmpty { listOf("Extortion Intent") }.take(3).joinToString(", ")
                 when (dominantVector) {
                     DemographicVector.STUDENT ->
                         "🚨 STUDENT EXTORTION INTERCEPTED: Academic/task trap or extortion demand spotted ('$sample'). Do NOT pay or recharge!"

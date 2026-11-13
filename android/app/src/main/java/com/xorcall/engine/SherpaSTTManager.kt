@@ -12,13 +12,15 @@ data class ThreatAnalysis(
     val warningMessage: String,
     val demographicVector: DemographicVector = DemographicVector.ALL,
     val isSyntheticVoice: Boolean = false,
-    val syntheticConfidence: Float = 0f
+    val syntheticConfidence: Float = 0f,
+    val normalizedTranscript: String = ""
 )
 
 /**
  * SherpaSTTManager
  * Coordinates On-Device Speech Transcription & Multi-Demographic Threat Interception:
  * - Powered by VoskSTTEngine (100% offline bundled model, works during live calls)
+ * - Integrates PhoneticSpeechNormalizer for robust Indian English extortion detection ("5 lakhs", "kidnap", "cbi")
  * - Streams live spoken words directly into UI transcript box in real-time
  * - Evaluates words against Extortion, Kidnap, Death Threats, and Demographic Vectors
  * - Analyzes raw PCM audio for AI synthetic voice clone signatures
@@ -35,6 +37,7 @@ class SherpaSTTManager(
 
     val isVoskReady: Boolean get() = voskEngine?.isReady == true
     val isUnpacking: Boolean get() = voskEngine?.isUnpacking == true
+    val errorMessage: String? get() = voskEngine?.errorMessage
 
     var activeScope: DemographicVector = DemographicVector.ALL
     var onThreatDetected: ((analysis: ThreatAnalysis, transcript: String) -> Unit)? = null
@@ -42,13 +45,15 @@ class SherpaSTTManager(
     var onLiveTranscriptUpdate: ((transcript: String, isEndpoint: Boolean) -> Unit)? = null
     var onModelReady: (() -> Unit)? = null
 
+    private val transcriptListener: (String, Boolean) -> Unit = { rawText, isFinal ->
+        handleIncomingTranscript(rawText, isFinal)
+    }
+
     fun initialize(modelPath: String = "model-en") {
         if (isInitialized) return
         val ctx = context ?: return
         voskEngine = VoskSTTEngine.getInstance(ctx).apply {
-            onTranscript = { text, isFinal ->
-                handleIncomingTranscript(text, isFinal)
-            }
+            addTranscriptListener(transcriptListener)
             onModelReady = {
                 this@SherpaSTTManager.onModelReady?.invoke()
             }
@@ -64,26 +69,31 @@ class SherpaSTTManager(
         voskEngine?.initialize(scope)
     }
 
-    private fun handleIncomingTranscript(text: String, isFinal: Boolean) {
-        if (text.isBlank()) return
+    private fun handleIncomingTranscript(rawText: String, isFinal: Boolean) {
+        if (rawText.isBlank()) return
+
+        // Normalize raw speech (e.g. "five lacks", "five lock" -> "5 lakh")
+        val normalized = PhoneticSpeechNormalizer.normalize(rawText)
+        val displayText = if (normalized.isNotBlank()) normalized else rawText
 
         // 1. Notify UI listener
-        onLiveTranscriptUpdate?.invoke(text, isFinal)
+        onLiveTranscriptUpdate?.invoke(displayText, isFinal)
 
         // 2. Broadcast for UI receivers
         context?.let { ctx ->
             val transcriptIntent = Intent("com.xorcall.TRANSCRIPT_UPDATE").apply {
-                putExtra("text", text)
+                putExtra("text", displayText)
+                putExtra("rawText", rawText)
                 putExtra("isFinal", isFinal)
                 setPackage(ctx.packageName)
             }
             ctx.sendBroadcast(transcriptIntent)
         }
 
-        // 3. Evaluate threat against active lexicon
-        val analysis = analyzeText(text, activeScope)
+        // 3. Evaluate threat against active lexicon (using both raw and normalized)
+        val analysis = analyzeText(displayText, activeScope)
         if (analysis.isScamDetected) {
-            onThreatDetected?.invoke(analysis, text)
+            onThreatDetected?.invoke(analysis, displayText)
         }
     }
 
@@ -112,7 +122,8 @@ class SherpaSTTManager(
                 warningMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE DETECTED! Voice is artificially generated.",
                 demographicVector = activeScope,
                 isSyntheticVoice = true,
-                syntheticConfidence = acousticResult.syntheticConfidence
+                syntheticConfidence = acousticResult.syntheticConfidence,
+                normalizedTranscript = alertText
             )
             onThreatDetected?.invoke(analysis, alertText)
         }
@@ -137,7 +148,8 @@ class SherpaSTTManager(
                 warningMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE DETECTED! Voice is artificially generated.",
                 demographicVector = activeScope,
                 isSyntheticVoice = true,
-                syntheticConfidence = acousticResult.syntheticConfidence
+                syntheticConfidence = acousticResult.syntheticConfidence,
+                normalizedTranscript = alertText
             )
             onThreatDetected?.invoke(analysis, alertText)
         }
@@ -183,11 +195,13 @@ class SherpaSTTManager(
             warningMessage = enrichedMessage,
             demographicVector = result.matchedVector,
             isSyntheticVoice = isAiVoice,
-            syntheticConfidence = aiConfidence
+            syntheticConfidence = aiConfidence,
+            normalizedTranscript = text
         )
     }
 
     fun release() {
+        voskEngine?.removeTranscriptListener(transcriptListener)
         syntheticDetector.reset()
         isInitialized = false
     }

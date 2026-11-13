@@ -8,6 +8,7 @@ import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.*
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.zip.ZipInputStream
 
 /**
@@ -22,6 +23,7 @@ class VoskSTTEngine private constructor(private val context: Context) {
         private const val ASSET_ZIP_NAME = "model-en.zip"
         private const val MODEL_FOLDER_NAME = "model-en"
         private const val SAMPLE_RATE = 16000f
+        private const val MARKER_FILE_NAME = ".extraction_complete"
 
         @Volatile
         private var instance: VoskSTTEngine? = null
@@ -44,7 +46,31 @@ class VoskSTTEngine private constructor(private val context: Context) {
     var isUnpacking: Boolean = false
         private set
 
-    var onTranscript: ((text: String, isFinal: Boolean) -> Unit)? = null
+    @Volatile
+    var errorMessage: String? = null
+        private set
+
+    private val transcriptListeners = CopyOnWriteArrayList<(text: String, isFinal: Boolean) -> Unit>()
+
+    var onTranscript: ((text: String, isFinal: Boolean) -> Unit)?
+        get() = null
+        set(value) {
+            transcriptListeners.clear()
+            if (value != null) {
+                transcriptListeners.add(value)
+            }
+        }
+
+    fun addTranscriptListener(listener: (text: String, isFinal: Boolean) -> Unit) {
+        if (!transcriptListeners.contains(listener)) {
+            transcriptListeners.add(listener)
+        }
+    }
+
+    fun removeTranscriptListener(listener: (text: String, isFinal: Boolean) -> Unit) {
+        transcriptListeners.remove(listener)
+    }
+
     var onModelReady: (() -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
@@ -52,7 +78,11 @@ class VoskSTTEngine private constructor(private val context: Context) {
         get() = File(context.filesDir, MODEL_FOLDER_NAME)
 
     fun isModelExtracted(): Boolean {
-        return findModelDir(targetModelDir) != null
+        val marker = File(targetModelDir, MARKER_FILE_NAME)
+        if (!marker.exists()) return false
+        val modelDir = findModelDir(targetModelDir) ?: return false
+        val finalMdl = File(modelDir, "am/final.mdl")
+        return finalMdl.exists() && finalMdl.length() > 5_000_000L
     }
 
     /**
@@ -68,6 +98,11 @@ class VoskSTTEngine private constructor(private val context: Context) {
                 if (!isModelExtracted()) {
                     isUnpacking = true
                     Log.i(TAG, "Extracting bundled offline Vosk model zip from assets...")
+                    // Clean destination if partially corrupted
+                    if (targetModelDir.exists()) {
+                        targetModelDir.deleteRecursively()
+                    }
+                    targetModelDir.mkdirs()
                     extractModelZipFromAssets(context.assets, ASSET_ZIP_NAME, targetModelDir)
                     isUnpacking = false
                     Log.i(TAG, "Vosk model successfully extracted to ${targetModelDir.absolutePath}")
@@ -81,32 +116,34 @@ class VoskSTTEngine private constructor(private val context: Context) {
                         setPartialWords(true)
                     }
                     isReady = true
+                    errorMessage = null
                     Log.i(TAG, "Vosk STT engine initialized successfully at ${modelPath.absolutePath}")
                     withContext(Dispatchers.Main) {
                         onModelReady?.invoke()
                     }
                 } else {
-                    Log.e(TAG, "Model directory not found after extraction")
-                    onError?.invoke("Model files missing in assets")
+                    val err = "Model files missing after extraction"
+                    Log.e(TAG, err)
+                    errorMessage = err
+                    onError?.invoke(err)
                 }
             } catch (e: Exception) {
+                val err = "Speech engine init error: ${e.message}"
                 Log.e(TAG, "Failed to initialize Vosk model", e)
                 isUnpacking = false
-                onError?.invoke("Speech engine init error: ${e.message}")
+                errorMessage = err
+                onError?.invoke(err)
             }
         }
     }
 
     private fun findModelDir(baseDir: File): File? {
         if (!baseDir.exists()) return null
-        if (File(baseDir, "am").exists() || File(baseDir, "conf").exists()) return baseDir
+        if (File(baseDir, "am").exists() && File(baseDir, "conf").exists()) return baseDir
         baseDir.listFiles()?.forEach { sub ->
-            if (sub.isDirectory && (File(sub, "am").exists() || File(sub, "conf").exists())) {
+            if (sub.isDirectory && File(sub, "am").exists() && File(sub, "conf").exists()) {
                 return sub
             }
-        }
-        if (baseDir.isDirectory && (baseDir.listFiles()?.isNotEmpty() == true)) {
-            return baseDir
         }
         return null
     }
@@ -114,8 +151,9 @@ class VoskSTTEngine private constructor(private val context: Context) {
     private fun extractModelZipFromAssets(assetManager: AssetManager, zipAssetName: String, destDir: File) {
         destDir.mkdirs()
         assetManager.open(zipAssetName).use { inputStream ->
-            ZipInputStream(BufferedInputStream(inputStream)).use { zis ->
+            ZipInputStream(BufferedInputStream(inputStream, 65536)).use { zis ->
                 var entry = zis.nextEntry
+                val buffer = ByteArray(65536)
                 while (entry != null) {
                     val outFile = File(destDir, entry.name)
                     if (entry.isDirectory) {
@@ -123,7 +161,6 @@ class VoskSTTEngine private constructor(private val context: Context) {
                     } else {
                         outFile.parentFile?.mkdirs()
                         FileOutputStream(outFile).use { fos ->
-                            val buffer = ByteArray(8192)
                             var len: Int
                             while (zis.read(buffer).also { len = it } > 0) {
                                 fos.write(buffer, 0, len)
@@ -135,6 +172,8 @@ class VoskSTTEngine private constructor(private val context: Context) {
                 }
             }
         }
+        // Write completion marker file atomically
+        File(destDir, MARKER_FILE_NAME).writeText("ready")
     }
 
     /**
@@ -150,17 +189,27 @@ class VoskSTTEngine private constructor(private val context: Context) {
                 val resultJson = recognizer!!.result
                 val text = parseVoskText(resultJson)
                 if (text.isNotBlank()) {
-                    onTranscript?.invoke(text, true)
+                    notifyTranscript(text, true)
                 }
             } else {
                 val partialJson = recognizer!!.partialResult
                 val text = parseVoskPartial(partialJson)
                 if (text.isNotBlank()) {
-                    onTranscript?.invoke(text, false)
+                    notifyTranscript(text, false)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Vosk acceptWaveform error", e)
+        }
+    }
+
+    private fun notifyTranscript(text: String, isFinal: Boolean) {
+        for (listener in transcriptListeners) {
+            try {
+                listener.invoke(text, isFinal)
+            } catch (e: Exception) {
+                Log.e(TAG, "Transcript listener error", e)
+            }
         }
     }
 

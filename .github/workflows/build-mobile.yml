@@ -46,25 +46,26 @@ jobs:
       - name: Copy & Rename APK
         run: |
           mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.9-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.1.0-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.0.9-debug.apk
+          path: build-artifacts/XORcall-v1.1.0-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.9-apk
-          name: "XORcall v1.0.9 Android APK (Optimized Bundled Vosk STT — Vivo V25 Pro Verified Installation)"
+          tag_name: v1.1.0-apk
+          name: "XORcall v1.1.0 Android APK (Direct Telephony Audio Interceptor + Phonetic Extortion Normalizer)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.0.9
-            - **Optimized APK Packaging**: Packed offline model as a clean uncompressed asset zip (`model-en.zip`) and restored `arm64-v8a` + `armeabi-v7a` native binaries, resolving Vivo FuntouchOS / iManager installation parse errors.
-            - **100% Offline Speech Recognition**: Zero runtime downloads. Unpacks in 0.5s into app cache and runs offline Kaldi speech recognition during calls.
-            - **Live In-App Mic Testing**: Tap `TEST LIVE MIC (6s SPEAK TEST)` to test your microphone and live threat detection right in the app.
-            - **Live Call Interceptor**: Intercepts in-call audio and fires Cheek Haptics, In-Ear Audio Whisper, Alert Banner, and Guardian Ping on extortion threats.
-          files: build-artifacts/XORcall-v1.0.9-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.1.0
+            - **Direct Telephony Audio Interception**: Ingests in-call audio directly from the device's voice communication mixer (`VOICE_CALL` / `VOICE_COMMUNICATION` / `VOICE_DOWNLINK`) upon `OFFHOOK`, without needing physical loudspeaker playback.
+            - **Hardware Digital AGC Pre-Amplifier**: Amplifies quiet remote caller audio by +20dB with hyperbolic tangent (`tanh`) soft-limiter to prevent distortion while maximizing Vosk speech sensitivity.
+            - **Phonetic Speech Normalizer**: Resolves Indian English extortion speech patterns transcribed by US English acoustic models (`"five lacks"`, `"five lock"`, `"50 lacks"` -> canonical `"5 lakh"`, `"kid nap"` -> `"kidnap"`, `"c b i"` -> `"cbi"`).
+            - **Multi-Listener Thread-Safe STT Pipeline**: Prevents service and activity listener overwrites, with atomic model extraction verification.
+            - **Real-Time Live Audio Energy Meter**: Displays real-time audio capture energy (RMS %) and selected audio source directly on the dashboard.
+          files: build-artifacts/XORcall-v1.1.0-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
