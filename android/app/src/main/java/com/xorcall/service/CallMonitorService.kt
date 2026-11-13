@@ -23,6 +23,13 @@ import com.xorcall.ui.FloatingAlertOverlay
 import kotlinx.coroutines.*
 import org.json.JSONObject
 
+/**
+ * CallMonitorService
+ * Autonomous Foreground Guardian Service.
+ * Listens for extortion & Digital Arrest speech patterns via on-device SherpaSTTManager,
+ * fires escalating Taptic sensory shockwave pulses against cheek/ear via Proximity Sensor,
+ * and mounts Heads-Up floating banner overlays over incoming phone / WhatsApp calls.
+ */
 class CallMonitorService : Service(), TelemetryListener {
 
     private val CHANNEL_ID = "XORcall_Guardian_Channel"
@@ -41,7 +48,7 @@ class CallMonitorService : Service(), TelemetryListener {
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 2
+    private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096)
 
     override fun onCreate() {
         super.onCreate()
@@ -49,8 +56,28 @@ class CallMonitorService : Service(), TelemetryListener {
             hapticEngine = TapticHapticEngine(this)
             hapticEngine.startListening()
 
-            sttManager = SherpaSTTManager(assets)
+            sttManager = SherpaSTTManager(assets, this)
             sttManager.initialize()
+
+            sttManager.onThreatDetected = { analysis, transcript ->
+                // 1. Fire hardware sensory shockwave haptics
+                hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
+
+                // 2. Display intrusive floating alert overlay & Heads-Up Notification
+                scope.launch(Dispatchers.Main) {
+                    floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                }
+
+                // 3. Broadcast to MainActivity
+                val intent = Intent("com.xorcall.THREAT_ALERT").apply {
+                    putExtra("level", analysis.riskLevel.name)
+                    putExtra("message", analysis.warningMessage)
+                    putExtra("transcript", transcript)
+                    putExtra("keywords", analysis.matchedKeywords.toTypedArray())
+                    setPackage(packageName)
+                }
+                sendBroadcast(intent)
+            }
 
             floatingOverlay = FloatingAlertOverlay(this)
             packageWatchdog = PackageWatchdog(this)
@@ -63,7 +90,7 @@ class CallMonitorService : Service(), TelemetryListener {
             }
 
             createNotificationChannel()
-            val notification = buildForegroundNotification("Kavach Shield Active - Monitoring In-Call Audio")
+            val notification = buildForegroundNotification("Kavach Shield Active - Real-Time Interception Armed")
             
             val hasMicPermission = ContextCompat.checkSelfPermission(
                 this,
@@ -93,6 +120,17 @@ class CallMonitorService : Service(), TelemetryListener {
         }
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val testText = intent?.getStringExtra("EXTRA_TEST_TEXT")
+        if (!testText.isNullOrBlank()) {
+            val analysis = sttManager.analyzeText(testText)
+            if (analysis.isScamDetected) {
+                sttManager.onThreatDetected?.invoke(analysis, testText)
+            }
+        }
+        return START_STICKY
+    }
+
     private fun startAudioCapture() {
         val hasMicPermission = ContextCompat.checkSelfPermission(
             this,
@@ -101,35 +139,15 @@ class CallMonitorService : Service(), TelemetryListener {
         if (!hasMicPermission) return
 
         try {
-            audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
-            )
-
-            if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
-                audioRecord?.startRecording()
-                isRecording = true
-
-                scope.launch {
-                    val shortBuffer = ShortArray(1600) // 100ms at 16kHz
-                    val floatBuffer = FloatArray(1600)
-
-                    while (isActive && isRecording) {
-                        val readCount = audioRecord?.read(shortBuffer, 0, shortBuffer.size) ?: 0
-                        if (readCount > 0) {
-                            for (i in 0 until readCount) {
-                                floatBuffer[i] = shortBuffer[i] / 32768.0f
-                            }
-                            sttManager.acceptAudioChunk(floatBuffer) { text, isEndpoint ->
-                                if (text.isNotBlank() && isEndpoint) {
-                                    webSocketClient?.sendUtterance(text)
-                                }
-                            }
-                        }
+            // Continuous speech recognizer for live conversational extraction
+            sttManager.startContinuousListening { text, isEndpoint ->
+                if (text.isNotBlank()) {
+                    val intent = Intent("com.xorcall.TRANSCRIPT_UPDATE").apply {
+                        putExtra("text", text)
+                        putExtra("isEndpoint", isEndpoint)
+                        setPackage(packageName)
                     }
+                    sendBroadcast(intent)
                 }
             }
         } catch (e: Exception) {
@@ -146,9 +164,7 @@ class CallMonitorService : Service(), TelemetryListener {
                         withContext(Dispatchers.Main) {
                             floatingOverlay.showCriticalAlert(
                                 "CRITICAL: Remote desktop tool detected during call! Blocked to protect bank accounts."
-                            ) {
-                                // On dismiss
-                            }
+                            )
                         }
                     }
                 } catch (e: Exception) {
@@ -172,9 +188,7 @@ class CallMonitorService : Service(), TelemetryListener {
         if (level == RiskLevel.CRITICAL) {
             val summary = json.optString("vernacular_summary", "No police agency arrests anyone by video call. Hang up.")
             scope.launch(Dispatchers.Main) {
-                floatingOverlay.showCriticalAlert(summary) {
-                    // Hangup / Emergency connect
-                }
+                floatingOverlay.showCriticalAlert(summary)
             }
         }
     }
@@ -186,8 +200,10 @@ class CallMonitorService : Service(), TelemetryListener {
     override fun onDestroy() {
         super.onDestroy()
         isRecording = false
-        audioRecord?.stop()
-        audioRecord?.release()
+        try {
+            audioRecord?.stop()
+            audioRecord?.release()
+        } catch (_: Exception) {}
         audioRecord = null
         sttManager.release()
         hapticEngine.stopListening()

@@ -93,6 +93,27 @@
   white-space: nowrap;
 }
 
+/* Video-Accurate Giant Hollow Outline Watermark (X O R c a l l) */
+.ghost-hollow-watermark {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.08);
+  user-select: none;
+  pointer-events: none;
+  letter-spacing: 0.18em;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.ghost-hollow-watermark-light {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(20, 21, 26, 0.08);
+  user-select: none;
+  pointer-events: none;
+  letter-spacing: 0.18em;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 /* Minimal Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;

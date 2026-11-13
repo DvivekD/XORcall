@@ -7,6 +7,8 @@ import KatanaScrollJourney from "@/components/motion/KatanaScrollJourney";
 import GuardianCompanion from "@/components/ui/GuardianCompanion";
 import CyberWarfareGlobe3D from "@/components/motion/CyberWarfareGlobe3D";
 import AudioFrequencyRibbon3D from "@/components/motion/AudioFrequencyRibbon3D";
+import CyberKatana3D from "@/components/motion/CyberKatana3D";
+import CyberOctagonMedallion from "@/components/motion/CyberOctagonMedallion";
 import { 
   Zap, Radio, PhoneCall, ChevronRight, AlertOctagon, 
   Vibrate, Volume2, Eye, UserCheck
@@ -138,14 +140,29 @@ export default function Home() {
       {/* Fixed Minimalist Header */}
       <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between">
         
-        {/* Brand & Red Vermilion Square Icon (Video Accurate) */}
+        {/* Brand & Red Vermilion Square Icon + Badges */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-[#e11d48] flex items-center justify-center text-white shadow-md">
             <Zap className="w-4 h-4 fill-white" />
           </div>
-          <div>
+          <div className="flex items-center gap-2">
             <span className={`font-display text-lg font-black tracking-tight ${isLightMode ? "text-[#14151a]" : "text-white"}`}>
               XORcall<sup className="text-[10px] font-normal">©</sup>
+            </span>
+
+            {/* ( 8 ) Octet Symbol */}
+            <span className="font-mono text-xs font-bold text-slate-400 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-full hidden sm:inline-block">
+              ( 8 )
+            </span>
+
+            {/* Orange / Coral Pill ( 🗡️ べ ) */}
+            <span className="font-mono text-xs font-bold text-[#fb923c] bg-[#f97316]/20 border border-[#f97316]/40 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+              <span>( 🗡️ べ )</span>
+            </span>
+
+            {/* Version Badge */}
+            <span className="font-mono text-[10px] font-bold text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-2 py-0.5 rounded-full hidden md:inline-block">
+              V_2.0.4
             </span>
           </div>
         </div>
@@ -193,8 +210,11 @@ export default function Home() {
           </a>
         </nav>
 
-        {/* Spacer for top-right % indicator */}
-        <div className="w-12 h-6" />
+        {/* Right side live status indicator */}
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-slate-400 hidden lg:inline">ON-DEVICE ZIPFORMER</span>
+        </div>
       </header>
 
       {/* =========================================================================
@@ -202,34 +222,41 @@ export default function Home() {
           ========================================================================= */}
       <section id="hero" className="min-h-screen pt-32 pb-16 px-6 sm:px-12 relative flex flex-col justify-between overflow-hidden bg-[#0f1014] text-white">
         
-        {/* Giant Parallax Watermark Text (Space Grotesk) */}
+        {/* Giant Hollow Outline Parallax Watermark Text (Space Grotesk) */}
         <div 
-          className="absolute -top-8 left-0 right-0 overflow-hidden pointer-events-none select-none z-0"
+          className="absolute -bottom-4 sm:-bottom-8 left-0 right-0 overflow-hidden pointer-events-none select-none z-0"
           style={{ transform: `translate3d(-${watermarkX}px, 0, 0)` }}
         >
-          <span className="ghost-watermark-dark text-[22vw] leading-none block font-display">
-            XORcall
+          <span className={`${isLightMode ? "ghost-hollow-watermark-light" : "ghost-hollow-watermark"} text-[20vw] sm:text-[22vw] leading-none block font-display`}>
+            X O R c a l l
           </span>
         </div>
 
-        {/* Minimalist Hero Title (Zero Clutter, Pure Space Grotesk) */}
-        <div className="relative z-10 max-w-4xl mt-12">
-          <div className="text-[11px] font-mono tracking-widest text-[#e11d48] font-bold uppercase mb-4">
-            V_ 2.0.4 · AUTONOMOUS COGNITIVE DEFENSE
+        {/* Centerpiece: Pop-up 3D Katana & NIST Medallion Entrance (Video Frame 0000) */}
+        <div className="absolute inset-0 w-full h-full z-0 pointer-events-none flex items-center justify-center">
+          <CyberOctagonMedallion progress={0} activePhaseIdx={0} />
+          <CyberKatana3D progress={0} className="w-full h-full" />
+        </div>
+
+        {/* Minimalist Hero Title (Top-Left: Master Your Safety - Space Grotesk) */}
+        <div className="relative z-10 max-w-4xl mt-8 sm:mt-12">
+          <div className="text-[11px] font-mono tracking-widest text-[#e11d48] font-bold uppercase mb-4 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#e11d48] animate-pulse" />
+            V_2.0.4 · AUTONOMOUS COGNITIVE DEFENSE
           </div>
           
-          <h1 className="font-display text-5xl sm:text-7xl md:text-8xl font-black tracking-tight leading-[0.98] text-white">
+          <h1 className="font-display text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-black tracking-tight leading-[0.94] text-white">
             Master <br />
             Your Safety
           </h1>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-8">
-            <span className="text-xs font-mono text-slate-400">
-              Built by Team KANYARASI · Colossus 3.0
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-6">
+            <span className="text-xs font-mono font-bold text-slate-300">
+              Built by Team KANYARASI
             </span>
             <span className="text-slate-600 hidden sm:inline">|</span>
             <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider">
-              CSS-FIRST. JS-LIGHT · 60 FPS
+              CSS-FIRST · JS-LIGHT · 60 FPS
             </span>
           </div>
         </div>

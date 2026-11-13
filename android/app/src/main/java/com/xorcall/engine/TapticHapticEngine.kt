@@ -16,41 +16,48 @@ enum class RiskLevel {
 
 /**
  * TapticHapticEngine
- * Evaluates hardware proximity sensor state. When the phone is pressed against
- * the user's ear and the display is off, visual UI warnings are completely invisible.
- * This engine vibrates escalating sensory patterns directly into the cheek and hand.
+ * Evaluates hardware proximity sensor state and fires escalating sensory patterns.
+ * Direct sensory vibration alerts the user even when the display is held to the cheek.
  */
 class TapticHapticEngine(private val context: Context) : SensorEventListener {
 
-    private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val proximitySensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+    private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+    private val proximitySensor: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
     
     private var isNearEar: Boolean = false
     private var currentLevel: RiskLevel = RiskLevel.SAFE
 
-    // Modular Intervention Configuration (Addresses user/judge dislike of vibration)
-    var isHapticsEnabled: Boolean = false
+    // Enabled by default so vibration alerts work immediately
+    var isHapticsEnabled: Boolean = true
     var isAudioWhisperEnabled: Boolean = true
     var isSilentFamilyPingEnabled: Boolean = true
     var isHeadsUpBannerEnabled: Boolean = true
 
     private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-        vibratorManager.defaultVibrator
+        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+        vibratorManager?.defaultVibrator ?: (context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator)
     } else {
         @Suppress("DEPRECATION")
         context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
 
     fun startListening() {
-        proximitySensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        try {
+            proximitySensor?.let {
+                sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     fun stopListening() {
-        sensorManager.unregisterListener(this)
-        vibrator.cancel()
+        try {
+            sensorManager?.unregisterListener(this)
+            vibrator.cancel()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -73,39 +80,48 @@ class TapticHapticEngine(private val context: Context) : SensorEventListener {
         applyVibrationPattern(level)
     }
 
-    private fun applyVibrationPattern(level: RiskLevel) {
-        if (!isHapticsEnabled) {
-            vibrator.cancel()
-            return
-        }
+    /**
+     * Forcefully triggers an immediate physical shockwave buzz to pull user's attention.
+     */
+    fun triggerImmediateShockwave(level: RiskLevel = RiskLevel.CRITICAL) {
+        if (!isHapticsEnabled) return
         if (!vibrator.hasVibrator()) return
 
-        when (level) {
-            RiskLevel.SAFE -> vibrator.cancel()
-            
-            RiskLevel.WATCH -> {
-                // Heartbeat: 2 subtle 80ms pulses
-                val timings = longArrayOf(0, 80, 150, 80)
-                val amplitudes = intArrayOf(0, 60, 0, 60)
-                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val timings = when (level) {
+                    RiskLevel.CRITICAL -> longArrayOf(0, 250, 100, 250, 100, 450)
+                    RiskLevel.WARN -> longArrayOf(0, 180, 100, 180)
+                    RiskLevel.WATCH -> longArrayOf(0, 100, 100, 100)
+                    RiskLevel.SAFE -> longArrayOf(0, 50)
+                }
+                val effect = if (vibrator.hasAmplitudeControl()) {
+                    val amplitudes = when (level) {
+                        RiskLevel.CRITICAL -> intArrayOf(0, 255, 0, 255, 0, 255)
+                        RiskLevel.WARN -> intArrayOf(0, 180, 0, 180)
+                        RiskLevel.WATCH -> intArrayOf(0, 100, 0, 100)
+                        RiskLevel.SAFE -> intArrayOf(0, 60)
+                    }
+                    VibrationEffect.createWaveform(timings, amplitudes, -1)
+                } else {
+                    VibrationEffect.createWaveform(timings, -1)
+                }
                 vibrator.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                val pattern = longArrayOf(0, 250, 100, 250, 100, 450)
+                vibrator.vibrate(pattern, -1)
             }
-
-            RiskLevel.WARN -> {
-                // Staccato SOS: 3 sharp buzzes with escalating amplitude
-                val timings = longArrayOf(0, 180, 100, 180, 100, 220)
-                val amplitudes = intArrayOf(0, 140, 0, 180, 0, 240)
-                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                vibrator.vibrate(effect)
-            }
-
-            RiskLevel.CRITICAL -> {
-                // Violent erratic rhythm designed to shock user into pulling phone away from face
-                val timings = longArrayOf(0, 350, 80, 350, 80, 500)
-                val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255)
-                val effect = VibrationEffect.createWaveform(timings, amplitudes, 0) // Repeat until cancelled
-                vibrator.vibrate(effect)
-            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
+    }
+
+    private fun applyVibrationPattern(level: RiskLevel) {
+        if (!isHapticsEnabled) {
+            try { vibrator.cancel() } catch (_: Exception) {}
+            return
+        }
+        triggerImmediateShockwave(level)
     }
 }

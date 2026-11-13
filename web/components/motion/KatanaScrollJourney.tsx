@@ -2,42 +2,48 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import CyberKatana3D from "@/components/motion/CyberKatana3D";
+import CyberOctagonMedallion from "@/components/motion/CyberOctagonMedallion";
 
 const PHRASES = [
   {
-    phase: "PHASE 01 // IMPERSONATION",
+    phase: "PHASE 01 // IMPERSONATION [IDENTIFY]",
     title: "The Hook Pretext",
     quote: "“A parcel containing 140g narcotics seized under your Aadhaar card.”",
     color: "text-red-400",
-    stageNum: "01"
+    stageNum: "01",
+    nist: "IDENTIFY"
   },
   {
-    phase: "PHASE 02 // COERCION",
+    phase: "PHASE 02 // COERCION [PROTECT]",
     title: "Digital Arrest",
     quote: "“You are under non-bailable arrest. Immediate video confinement active.”",
     color: "text-amber-400",
-    stageNum: "02"
+    stageNum: "02",
+    nist: "PROTECT"
   },
   {
-    phase: "PHASE 03 // ISOLATION",
+    phase: "PHASE 03 // ISOLATION [DETECT]",
     title: "Psychological Isolation",
     quote: "“Lock your door. Stay on camera. Do not inform any family member.”",
     color: "text-blue-400",
-    stageNum: "03"
+    stageNum: "03",
+    nist: "DETECT"
   },
   {
-    phase: "PHASE 04 // EXTORTION",
+    phase: "PHASE 04 // EXTORTION [RESPOND]",
     title: "Liquidation Vault",
     quote: "“Transfer ₹4,00,000 by RTGS to RBI verification escrow account now.”",
     color: "text-rose-400",
-    stageNum: "04"
+    stageNum: "04",
+    nist: "RESPOND"
   },
   {
-    phase: "PHASE 05 // NEUTRALIZED",
+    phase: "PHASE 05 // NEUTRALIZED [RECOVER]",
     title: "XORcall Disruption",
     quote: "“Line severed by on-device Zipformer. Tamper-evident dossier locked to 1930.”",
     color: "text-emerald-400",
-    stageNum: "05"
+    stageNum: "05",
+    nist: "RECOVER"
   }
 ];
 
@@ -74,12 +80,18 @@ export default function KatanaScrollJourney() {
         
         {/* Top Phase Header */}
         <div className="z-30 text-center max-w-2xl pt-6 transition-all duration-300">
-          <div className="text-[11px] font-mono tracking-widest uppercase font-bold text-slate-400 mb-2">
-            {currentPhrase.phase}
+          <div className="text-[11px] font-mono tracking-widest uppercase font-bold text-slate-400 mb-2 flex items-center justify-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#e11d48] animate-ping" />
+            <span>{currentPhrase.phase}</span>
           </div>
           <h2 className="font-display text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tight">
             {currentPhrase.title}
           </h2>
+        </div>
+
+        {/* 5-Phase NIST Octagon Cyber Medallion (Behind 3D Katana) */}
+        <div className="absolute inset-0 w-full h-full z-0 pointer-events-none flex items-center justify-center">
+          <CyberOctagonMedallion progress={journeyProgress} activePhaseIdx={activeIdx} />
         </div>
 
         {/* 3D Katana Canvas (Fills Screen, Upper Blade & Lower Scabbard Split Around Center) */}
@@ -97,7 +109,7 @@ export default function KatanaScrollJourney() {
             <span>KATANA UNSHEATHE : {Math.round(journeyProgress * 100)}%</span>
             <span className="text-slate-600">·</span>
             <span className={`font-bold ${currentPhrase.color}`}>
-              STAGE {currentPhrase.stageNum} OF 05
+              STAGE {currentPhrase.stageNum} OF 05 // {currentPhrase.nist}
             </span>
           </div>
         </div>

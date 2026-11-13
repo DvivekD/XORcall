@@ -39,26 +39,27 @@ jobs:
       - name: Copy & Rename APK
         run: |
           mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.1-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.2-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.0.1-debug.apk
+          path: build-artifacts/XORcall-v1.0.2-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.1-apk
-          name: "XORcall v1.0.1 Android APK (Vivo/Android 14 Crash Fix)"
+          tag_name: v1.0.2-apk
+          name: "XORcall v1.0.2 Android APK (Live Speech & Threat Haptics Interceptor)"
           body: |
-            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.1
-            - Fixed: SecurityException on cold launch by requesting RECORD_AUDIO & POST_NOTIFICATIONS runtime permissions before starting Foreground Service.
-            - Added: Resilient try-catch error boundary around Vivo / OEM background service & floating overlays.
-            - On-Device streaming acoustic analyzer & VAD.
-            - Proximity-aware sensory engine & Package Watchdog Trojan Killer.
+            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.2
+            - Real-time on-device speech & extortion threat interceptor.
+            - High-intensity sensory Taptic Haptics shockwave on threat detection.
+            - Heads-Up floating banner & priority system notification over incoming calls.
+            - Live voice microphone spotter for "accident", "police", "arrest", "money transfer", and "bail" keywords.
+            - Full compatibility with Vivo V25 Pro (Android 14 / FuntouchOS).
             - 1-Click 1930 Cybercrime Helpline Speed Dial.
-          files: build-artifacts/XORcall-v1.0.1-debug.apk
+          files: build-artifacts/XORcall-v1.0.2-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

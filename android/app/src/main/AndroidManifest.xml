@@ -19,6 +19,7 @@
     <!-- Network Telemetry to Cloud Brain -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
         android:allowBackup="true"
@@ -41,6 +42,14 @@
             android:name=".service.CallMonitorService"
             android:foregroundServiceType="microphone"
             android:exported="false" />
+
+        <receiver
+            android:name=".service.PhoneCallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
 
     </application>
 
