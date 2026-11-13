@@ -209,6 +209,14 @@ export default function Home() {
           >
             <span className="text-orange-500 font-bold">r/</span>Community
           </Link>
+          <Link
+            href="/pitch"
+            className={`text-xs font-mono px-3.5 py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1 ${
+              isLightMode ? "pill-button-light" : "pill-button text-cyan-400 border-cyan-500/30"
+            }`}
+          >
+            <span>Pitch Deck</span>
+          </Link>
           <a
             href="tel:1930"
             className="shimmer-pill-red text-xs font-mono font-bold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 cursor-pointer"
