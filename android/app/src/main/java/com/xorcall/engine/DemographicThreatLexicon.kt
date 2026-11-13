@@ -157,6 +157,7 @@ object DemographicThreatLexicon {
             }
             RiskLevel.WARN -> "⚠️ SUSPICIOUS CALL: Coercion keywords detected ('${activeMatches.joinToString(", ")}'). Stay alert."
             RiskLevel.SAFE -> "Normal conversation."
+            else -> "Normal conversation."
         }
 
         return VectorThreatResult(
