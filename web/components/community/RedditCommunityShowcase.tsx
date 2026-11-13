@@ -7,6 +7,7 @@ import {
   BarChart3, Sparkles, Filter, ThumbsUp, HeartHandshake, PhoneCall
 } from "lucide-react";
 import { AnimatedCounter } from "@/components/motion/LiveTelemetryTicker";
+import CommunitySentimentCanvas2D from "@/components/motion/CommunitySentimentCanvas2D";
 
 export default function RedditCommunityShowcase() {
   const [upvotes, setUpvotes] = useState<number>(2847);
@@ -17,42 +18,42 @@ export default function RedditCommunityShowcase() {
     {
       id: 1,
       author: "u/Karan_FintechArch",
-      badge: "Principal Staff Engineer · FinTech",
+      badge: "Staff Eng · FinTech",
       time: "16h ago",
       upvotes: 1142,
       upvoted: false,
       category: "tech",
-      text: "Why SMS popups fail: The Amygdala Hijack. When an elder hears 'CBI arrest warrant,' adrenaline spikes and screen goes black against their cheek. XORcall's multi-stage intent conjunction + out-of-band family verification solves this engineering reality."
+      text: "The Amygdala Hijack blinds elders; screen is dark against their cheek. Intent conjunction + out-of-band safe-ping is the only viable architecture."
     },
     {
       id: 2,
       author: "u/Shreya_UXDesign",
-      badge: "Lead Product Designer · BLR",
+      badge: "Lead Designer · BLR",
       time: "14h ago",
       upvotes: 894,
       upvoted: false,
       category: "stakeholders",
-      text: "Addressing 'What if the user dislikes vibration?': XORcall makes interventions modular (Haptics, In-Ear Audio Whisper, Silent Family Ping). My mother hates phone buzzes; having it silently ping my phone would have saved our family ₹14L."
+      text: "Modular modalities are critical: my mother hates vibration; silent child ping would have prevented our family's ₹14L digital arrest extortion."
     },
     {
       id: 3,
       author: "u/Bitsian_Dev2025",
-      badge: "Student · BITS Pilani 4th Year",
+      badge: "Student · BITS 4th Yr",
       time: "12h ago",
       upvotes: 628,
       upvoted: false,
       category: "victims",
-      text: "Glad this was broadened to students! Three juniors in our hostel lost semester fees to Telegram rating tasks. And the ₹7.67 Cr BITS Pilani fake admission scam proved students panic too. Detecting fake fee portals and task deposits is huge."
+      text: "Hostel juniors lost semester fees to Telegram rating tasks; ₹7.67 Cr BITS scam proved students panic too. Detecting fake fee portals is huge."
     },
     {
       id: 4,
       author: "u/Advocate_RamanCyber",
-      badge: "Cyber Legal Counsel · Ex-I4C",
+      badge: "Legal Counsel · Ex-I4C",
       time: "9h ago",
       upvotes: 492,
       upvoted: false,
       category: "stakeholders",
-      text: "1930 / I4C CFCFRMS Golden Hour integration is the regulatory killer feature. Reporting within 2 hours freezes mule accounts before cashout. Generating BSA-compliant PDF dossiers makes law enforcement triage instant."
+      text: "1930 Golden Hour integration freezes mule accounts within 2 hours. BSA Section 63 compliant dossiers make cyber cell triage instant."
     }
   ]);
 
@@ -117,33 +118,36 @@ export default function RedditCommunityShowcase() {
         </div>
       </div>
 
+      {/* Animated Community Sentiment & Upvote Harmonics Canvas */}
+      <CommunitySentimentCanvas2D upvotes={upvotes} />
+
       {/* Metrics Bar with Animated Counters */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="glass-panel rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
+        <div className="glass-panel rounded-xl p-3 border border-slate-800 flex flex-col justify-between">
           <span className="text-[9px] text-slate-400 uppercase">GUARDIAN_ACCEPTANCE</span>
           <div className="text-2xl font-black text-emerald-400 my-1">
             <AnimatedCounter target={94.2} decimals={1} suffix="%" />
           </div>
-          <span className="text-[9px] text-slate-500">Demands automated in-call defense</span>
+          <span className="text-[9px] text-slate-500">Demands automated defense</span>
         </div>
 
-        <div className="glass-panel rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
-          <span className="text-[9px] text-slate-400 uppercase">MODULAR_MODALITY_DEMAND</span>
+        <div className="glass-panel rounded-xl p-3 border border-slate-800 flex flex-col justify-between">
+          <span className="text-[9px] text-slate-400 uppercase">MODULAR_DEMAND</span>
           <div className="text-2xl font-black text-cyan-400 my-1">
             <AnimatedCounter target={89.1} decimals={1} suffix="%" />
           </div>
-          <span className="text-[9px] text-slate-500">Insists on whisper / silent ping</span>
+          <span className="text-[9px] text-slate-500">Prefers whisper / silent ping</span>
         </div>
 
-        <div className="glass-panel rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
-          <span className="text-[9px] text-slate-400 uppercase">NATIONAL_EXTORTION_LOSS</span>
+        <div className="glass-panel rounded-xl p-3 border border-slate-800 flex flex-col justify-between">
+          <span className="text-[9px] text-slate-400 uppercase">NATIONAL_EXTORTION</span>
           <div className="text-2xl font-black text-amber-400 my-1">
             ₹4,057 Cr
           </div>
-          <span className="text-[9px] text-slate-500">Seniors (41%) · Students (34%)</span>
+          <span className="text-[9px] text-slate-500">Seniors 41% · Students 34%</span>
         </div>
 
-        <div className="glass-panel rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
+        <div className="glass-panel rounded-xl p-3 border border-slate-800 flex flex-col justify-between">
           <span className="text-[9px] text-slate-400 uppercase">WILLINGNESS_TO_PAY</span>
           <div className="text-2xl font-black text-rose-400 my-1">
             ₹199<span className="text-xs font-normal text-slate-400">/mo</span>
@@ -152,9 +156,9 @@ export default function RedditCommunityShowcase() {
         </div>
       </div>
 
-      {/* Reddit Viral Post Container */}
+      {/* Reddit Post Streamlined Container */}
       <div className="rounded-2xl border border-slate-800 bg-[#0c101a] shadow-2xl overflow-hidden">
-        {/* Reddit Post Header */}
+        {/* Post Header */}
         <div className="p-3 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-orange-600 flex items-center justify-center text-white font-black text-[10px]">
@@ -170,8 +174,8 @@ export default function RedditCommunityShowcase() {
         </div>
 
         {/* Post Content */}
-        <div className="p-5 flex gap-4">
-          {/* Reddit Upvote Sidebar */}
+        <div className="p-4 flex gap-4">
+          {/* Upvote Column */}
           <div className="flex flex-col items-center gap-1 w-9 shrink-0">
             <button
               onClick={handleUpvote}
@@ -193,17 +197,17 @@ export default function RedditCommunityShowcase() {
           </div>
 
           {/* Post Body */}
-          <div className="flex-1 space-y-3">
-            <h3 className="text-base font-bold text-white">
+          <div className="flex-1 space-y-2.5">
+            <h3 className="text-sm font-bold text-white">
               [Show r/DI] Built XORcall: Multi-Demographic In-Call Defense against Digital Arrest &amp; AI Deepfakes
             </h3>
 
-            <p className="text-xs text-slate-300 leading-relaxed font-sans">
-              Indian citizens lost ₹4,057 Cr to cyber extortion syndicates. We built XORcall with sub-200ms on-device Sherpa-ONNX intent conjunction, customizable sensory alerts (taptic haptics, in-ear audio whisper, silent child ping), and 1930 automated FIR dossiers.
+            <p className="text-xs text-slate-300 leading-snug font-sans">
+              Indian citizens lost ₹4,057 Cr to cyber syndicates. Built with sub-200ms Sherpa-ONNX intent conjunction, customizable sensory alerts (cheek haptics, in-ear whisper, silent child ping), and automated 1930 FIR dossiers.
             </p>
 
             {/* Filter Pills */}
-            <div className="flex items-center gap-1 pt-2 border-t border-slate-800 text-[10px]">
+            <div className="flex items-center gap-1 pt-1.5 border-t border-slate-800 text-[10px]">
               <span className="text-slate-500 uppercase">FILTER:</span>
               {[
                 { id: "top", label: "TOP" },
@@ -228,7 +232,7 @@ export default function RedditCommunityShowcase() {
             {/* Streamlined Comments */}
             <div className="space-y-2 pt-1">
               {filteredComments.map((c) => (
-                <div key={c.id} className="p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 text-xs font-sans">
+                <div key={c.id} className="p-2.5 bg-slate-900/60 rounded-xl border border-slate-800/80 text-xs font-sans">
                   <div className="flex items-center justify-between mb-1 font-mono text-[10px]">
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-orange-400">{c.author}</span>
@@ -244,7 +248,7 @@ export default function RedditCommunityShowcase() {
                       <span>{c.upvotes}</span>
                     </button>
                   </div>
-                  <p className="text-slate-300 text-xs leading-relaxed">{c.text}</p>
+                  <p className="text-slate-300 text-xs leading-snug">{c.text}</p>
                 </div>
               ))}
             </div>

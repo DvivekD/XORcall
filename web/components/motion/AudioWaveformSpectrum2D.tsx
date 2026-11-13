@@ -41,17 +41,21 @@ export default function AudioWaveformSpectrum2D({
     const numBars = 48;
     const barHeights = new Float32Array(numBars);
     const particles: Particle[] = [];
+    const MAX_PARTICLES = 70;
 
     const render = () => {
       animId = requestAnimationFrame(render);
       tick += 0.05;
 
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
-      if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
+
+      if (width < 20 || height < 20) return;
+
+      if (canvas.width !== Math.floor(width * dpr) || canvas.height !== Math.floor(height * dpr)) {
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
       }
 
       ctx.save();
@@ -85,7 +89,6 @@ export default function AudioWaveformSpectrum2D({
       // Update Bar Heights with procedural audio simulation
       for (let i = 0; i < numBars; i++) {
         const norm = i / numBars;
-        // Bell curve envelope
         const envelope = Math.sin(norm * Math.PI);
 
         let targetH = 4;
@@ -93,23 +96,25 @@ export default function AudioWaveformSpectrum2D({
           const wave1 = Math.sin(tick * 3 + i * 0.35) * 0.5 + 0.5;
           const wave2 = Math.cos(tick * 5 - i * 0.6) * 0.3 + 0.3;
           const jitter = Math.random() * 0.25;
-          targetH = (wave1 * 0.6 + wave2 * 0.4 + jitter) * (height * 0.7) * envelope + 6;
+          targetH = (wave1 * 0.6 + wave2 * 0.4 + jitter) * (height * 0.68) * envelope + 6;
         } else {
-          // Subtle standby idle pulse
-          targetH = (Math.sin(tick * 1.5 + i * 0.2) * 0.3 + 0.35) * (height * 0.18) * envelope + 3;
+          targetH = (Math.sin(tick * 1.5 + i * 0.2) * 0.3 + 0.35) * (height * 0.16) * envelope + 3;
         }
 
         // Smooth dampening
         barHeights[i] += (targetH - barHeights[i]) * 0.2;
-
+        const h = Math.max(2, barHeights[i]);
         const x = i * (barWidth + 2.5);
-        const h = barHeights[i];
 
         // Draw Spectrum Bar
         ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.roundRect(x, centerY - h, barWidth, h, [2, 2, 0, 0]);
-        ctx.fill();
+        if (typeof ctx.roundRect === "function") {
+          ctx.beginPath();
+          ctx.roundRect(x, centerY - h, barWidth, h, [2, 2, 0, 0]);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x, centerY - h, barWidth, h);
+        }
 
         // Mirrored bottom reflection
         ctx.fillStyle = isCrit
@@ -117,12 +122,16 @@ export default function AudioWaveformSpectrum2D({
           : isWarn
           ? "rgba(245, 158, 11, 0.12)"
           : "rgba(6, 182, 212, 0.12)";
-        ctx.beginPath();
-        ctx.roundRect(x, centerY + 2, barWidth, h * 0.3, [0, 0, 2, 2]);
-        ctx.fill();
+        if (typeof ctx.roundRect === "function") {
+          ctx.beginPath();
+          ctx.roundRect(x, centerY + 2, barWidth, h * 0.3, [0, 0, 2, 2]);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x, centerY + 2, barWidth, h * 0.3);
+        }
 
-        // Spawn glowing particles at high bar peaks
-        if (isAudio && h > height * 0.45 && Math.random() < 0.25) {
+        // Spawn glowing particles at high bar peaks (bounded)
+        if (isAudio && h > height * 0.42 && particles.length < MAX_PARTICLES && Math.random() < 0.2) {
           particles.push({
             x: x + barWidth / 2,
             y: centerY - h,
@@ -173,7 +182,7 @@ export default function AudioWaveformSpectrum2D({
   }, []);
 
   return (
-    <div className={`relative w-full h-[110px] rounded-xl overflow-hidden glass-panel border border-slate-800 ${className}`}>
+    <div className={`relative w-full h-[110px] rounded-xl overflow-hidden glass-panel border border-slate-800 select-none ${className}`}>
       <canvas ref={canvasRef} className="w-full h-full" />
       <div className="absolute top-2 left-3 right-3 flex items-center justify-between text-[9px] font-mono pointer-events-none text-slate-400">
         <span className="flex items-center gap-1.5">

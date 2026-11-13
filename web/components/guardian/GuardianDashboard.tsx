@@ -6,6 +6,7 @@ import {
   PhoneCall, Volume2, Lock, FileText, CheckCircle2, Zap, Radio, Activity
 } from "lucide-react";
 import { AnimatedCounter } from "@/components/motion/LiveTelemetryTicker";
+import GuardianTelemetryCanvas2D from "@/components/motion/GuardianTelemetryCanvas2D";
 
 export default function GuardianDashboard() {
   const [sirenActive, setSirenActive] = useState<boolean>(false);
@@ -23,7 +24,7 @@ export default function GuardianDashboard() {
       {/* Protected Profile Top Bar */}
       <div className="glass-panel rounded-2xl p-4 border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30 shrink-0">
             <Smartphone className="w-5 h-5 animate-pulse" />
           </div>
           <div>
@@ -56,6 +57,12 @@ export default function GuardianDashboard() {
         </div>
       </div>
 
+      {/* Live Animated Guardian Satellite Tether Canvas */}
+      <GuardianTelemetryCanvas2D
+        isSafeConfirmed={safeConfirmed}
+        isSirenActive={sirenActive}
+      />
+
       {/* Grid of Passive Sanity & Overrides */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         
@@ -64,10 +71,10 @@ export default function GuardianDashboard() {
           <div className="glass-panel rounded-2xl p-4 border border-slate-800">
             <div className="flex items-center justify-between mb-3 text-xs">
               <span className="font-bold text-white uppercase flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Passive Proof-of-Life Metrics
+                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Passive Proof-of-Life
               </span>
               <span className="text-[9px] text-emerald-400 font-bold bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/30">
-                LIVE_SENSOR_FEED
+                SENSOR_FEED
               </span>
             </div>
 
@@ -78,17 +85,17 @@ export default function GuardianDashboard() {
               </div>
 
               <div className="p-2.5 bg-slate-900/70 rounded-xl border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">GEO_LOCATION_BEACON:</span>
+                <span className="text-slate-400">GEO_BEACON:</span>
                 <span className="text-cyan-300 font-bold">Campus Wi-Fi (RVCE)</span>
               </div>
 
               <div className="p-2.5 bg-slate-900/70 rounded-xl border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">PEDOMETER_10M_VELOCITY:</span>
+                <span className="text-slate-400">PEDOMETER_10M:</span>
                 <span className="text-slate-200 font-bold">84 Steps (Active Walk)</span>
               </div>
 
               <div className="p-2.5 bg-slate-900/70 rounded-xl border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">IMPACT_DECELERATION:</span>
+                <span className="text-slate-400">IMPACT_DECEL:</span>
                 <span className="text-emerald-400 font-bold">0.0G (Zero Crash Detected)</span>
               </div>
             </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import CallSimulator from "@/components/simulator/CallSimulator";
 import GuardianDashboard from "@/components/guardian/GuardianDashboard";
 import IntentKillChainDeepDive from "@/components/intent/IntentKillChainDeepDive";
@@ -11,7 +12,7 @@ import { LiveTelemetryTicker, AnimatedCounter } from "@/components/motion/LiveTe
 import StringTuneScroll from "@/components/effects/StringTuneScroll";
 import { 
   ShieldAlert, Radio, UserCheck, Cpu, Workflow, 
-  TrendingUp, Activity, Globe, Waves, Zap, Terminal
+  TrendingUp, Activity, Globe, Waves, Zap, Terminal, Maximize2
 } from "lucide-react";
 
 export default function Home() {
@@ -121,6 +122,14 @@ export default function Home() {
               <UserCheck className="w-3.5 h-3.5" /> 
               <span>GUARDIAN</span>
             </button>
+
+            <Link
+              href="/sandbox"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-cyan-300 hover:text-white bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 transition-all cursor-pointer whitespace-nowrap shadow-sm shadow-cyan-500/20"
+            >
+              <Maximize2 className="w-3.5 h-3.5 animate-pulse" />
+              <span>3D SANDBOX</span>
+            </Link>
           </div>
 
           {/* Fast Telemetry Pills */}

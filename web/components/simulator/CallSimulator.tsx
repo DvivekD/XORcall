@@ -10,6 +10,7 @@ import {
 import CyberHologramShield3D from "@/components/motion/CyberHologramShield3D";
 import ThreatRadar2D from "@/components/motion/ThreatRadar2D";
 import AudioWaveformSpectrum2D from "@/components/motion/AudioWaveformSpectrum2D";
+import AudioFrequencyRibbon3D from "@/components/motion/AudioFrequencyRibbon3D";
 import ShockwavePulseRings from "@/components/motion/ShockwavePulseRings";
 import { AnimatedCounter } from "@/components/motion/LiveTelemetryTicker";
 
@@ -137,6 +138,8 @@ export default function CallSimulator() {
     silentFamilyPing: true,
     headsUpBanner: true
   });
+
+  const [audioVisualizerMode, setAudioVisualizerMode] = useState<"2d" | "3d">("2d");
 
   // Decoy & Honeypot State
   const [decoyActive, setDecoyActive] = useState<boolean>(false);
@@ -705,11 +708,50 @@ export default function CallSimulator() {
           )}
         </div>
 
-        {/* Live Audio Frequency Spectrum Canvas */}
-        <AudioWaveformSpectrum2D
-          isPlaying={isPlaying}
-          threatLevel={telemetry.level}
-        />
+        {/* Live Audio Frequency Spectrum / 3D Ribbon */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 px-1">
+            <span className="flex items-center gap-1.5 text-cyan-400 font-bold">
+              <Waves className="w-3.5 h-3.5 animate-pulse" />
+              {audioVisualizerMode === "3d" ? "3D AUDIO SPECTRAL RIBBON" : "2D FFT FREQUENCY SPECTRUM"}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setAudioVisualizerMode("2d")}
+                className={`px-2 py-0.5 rounded border transition-all cursor-pointer ${
+                  audioVisualizerMode === "2d"
+                    ? "bg-cyan-950 border-cyan-500 text-cyan-200 font-bold"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                }`}
+              >
+                2D FFT
+              </button>
+              <button
+                onClick={() => setAudioVisualizerMode("3d")}
+                className={`px-2 py-0.5 rounded border transition-all cursor-pointer ${
+                  audioVisualizerMode === "3d"
+                    ? "bg-indigo-950 border-indigo-500 text-indigo-200 font-bold"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                }`}
+              >
+                3D RIBBON
+              </button>
+            </div>
+          </div>
+
+          {audioVisualizerMode === "3d" ? (
+            <AudioFrequencyRibbon3D
+              isActive={isPlaying}
+              amplitude={isPlaying ? 1.4 : 0.4}
+              threatLevel={telemetry.level}
+            />
+          ) : (
+            <AudioWaveformSpectrum2D
+              isPlaying={isPlaying}
+              threatLevel={telemetry.level}
+            />
+          )}
+        </div>
 
         {/* Rolling Speech Transcript Feed */}
         <div className="glass-panel rounded-2xl p-4 border border-slate-800 flex flex-col flex-1 min-h-[170px]">

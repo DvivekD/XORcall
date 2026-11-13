@@ -48,12 +48,16 @@ export default function ThreatRadar2D({
     const render = () => {
       animId = requestAnimationFrame(render);
 
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
-      if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
+
+      // Skip render if canvas is unmeasured or hidden
+      if (width < 20 || height < 20) return;
+
+      if (canvas.width !== Math.floor(width * dpr) || canvas.height !== Math.floor(height * dpr)) {
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
       }
 
       ctx.save();
@@ -61,7 +65,8 @@ export default function ThreatRadar2D({
 
       const cx = width / 2;
       const cy = height / 2;
-      const radius = Math.min(cx, cy) - 16;
+      // Guard radius to strictly positive value to prevent IndexSizeError in ctx.arc()
+      const radius = Math.max(10, Math.min(cx, cy) - 16);
 
       ctx.clearRect(0, 0, width, height);
 
@@ -81,9 +86,12 @@ export default function ThreatRadar2D({
       ctx.strokeStyle = `rgba(${mainRgb}, 0.25)`;
       ctx.lineWidth = 1;
       for (let i = 1; i <= 4; i++) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, (radius * i) / 4, 0, Math.PI * 2);
-        ctx.stroke();
+        const ringRadius = (radius * i) / 4;
+        if (ringRadius > 0) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       // Crosshair Axes
@@ -132,7 +140,6 @@ export default function ThreatRadar2D({
       // Check blip hits & render targets
       const now = performance.now();
       blips.forEach((blip) => {
-        // Difference between sweep angle and blip angle
         let diff = (angle - blip.angle + Math.PI * 2) % (Math.PI * 2);
         if (diff < 0.08) {
           blip.lastHit = now;
@@ -157,7 +164,8 @@ export default function ThreatRadar2D({
           ctx.lineWidth = 1;
           ctx.globalAlpha = decay;
           ctx.beginPath();
-          ctx.arc(bx, by, 6 + (1 - decay) * 14, 0, Math.PI * 2);
+          const rippleR = Math.max(1, 6 + (1 - decay) * 14);
+          ctx.arc(bx, by, rippleR, 0, Math.PI * 2);
           ctx.stroke();
 
           // Blip Micro-label
@@ -185,7 +193,7 @@ export default function ThreatRadar2D({
   }, []);
 
   return (
-    <div className={`relative w-full h-full min-h-[220px] flex items-center justify-center ${className}`}>
+    <div className={`relative w-full h-full min-h-[200px] flex items-center justify-center select-none ${className}`}>
       <canvas ref={canvasRef} className="w-full h-full" />
       <div className="absolute bottom-2 left-3 text-[9px] font-mono text-slate-500 pointer-events-none">
         SWEEP: 360° AUTO · RF TRACE ACTIVE

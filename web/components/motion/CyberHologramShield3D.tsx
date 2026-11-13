@@ -37,12 +37,13 @@ export default function CyberHologramShield3D({
     if (!container) return;
 
     let animId: number;
+    let isContextLost = false;
     const width = container.clientWidth || 320;
     const height = container.clientHeight || 320;
 
     // Three.js Scene Setup
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(45, Math.max(0.1, width / (height || 1)), 0.1, 1000);
     camera.position.z = 5.2;
 
     const renderer = new THREE.WebGLRenderer({
@@ -51,8 +52,24 @@ export default function CyberHologramShield3D({
       powerPreference: "high-performance"
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     container.appendChild(renderer.domElement);
+
+    // WebGL Context Loss Handlers
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      isContextLost = true;
+      if (animId) cancelAnimationFrame(animId);
+    };
+
+    const handleContextRestored = () => {
+      isContextLost = false;
+      animate();
+    };
+
+    const canvas = renderer.domElement;
+    canvas.addEventListener("webglcontextlost", handleContextLost, false);
+    canvas.addEventListener("webglcontextrestored", handleContextRestored, false);
 
     // Group for all shield elements
     const shieldGroup = new THREE.Group();
@@ -90,7 +107,6 @@ export default function CyberHologramShield3D({
     particleGeometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
     particleGeometry.setAttribute("scale", new THREE.BufferAttribute(particleScales, 1));
 
-    // Custom shader-like point material
     const pointMaterial = new THREE.PointsMaterial({
       color: 0x06b6d4,
       size: 0.055,
@@ -161,13 +177,15 @@ export default function CyberHologramShield3D({
     const critColor = new THREE.Color(0xef4444); // Electric Crimson
     const currentColor = new THREE.Color(0x06b6d4);
 
-    // Mouse Interaction
-    const handleMouseMove = (e: MouseEvent) => {
+    // Unified Pointer Interaction (Touch + Mouse)
+    const handlePointerMove = (e: PointerEvent) => {
       const rect = container.getBoundingClientRect();
-      stateRef.current.mouse.targetX = ((e.clientX - rect.left) / rect.width - 0.5) * 1.4;
-      stateRef.current.mouse.targetY = ((e.clientY - rect.top) / rect.height - 0.5) * 1.4;
+      if (rect.width > 0 && rect.height > 0) {
+        stateRef.current.mouse.targetX = ((e.clientX - rect.left) / rect.width - 0.5) * 1.4;
+        stateRef.current.mouse.targetY = ((e.clientY - rect.top) / rect.height - 0.5) * 1.4;
+      }
     };
-    container.addEventListener("mousemove", handleMouseMove);
+    container.addEventListener("pointermove", handlePointerMove);
 
     // Resize handling
     const resizeObserver = new ResizeObserver((entries) => {
@@ -183,10 +201,11 @@ export default function CyberHologramShield3D({
     });
     resizeObserver.observe(container);
 
-    let clock = new THREE.Clock();
+    const clock = new THREE.Clock();
 
     // 60 FPS Render Loop
     const animate = () => {
+      if (isContextLost) return;
       animId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
       const currentLevel = stateRef.current.level;
@@ -205,7 +224,7 @@ export default function CyberHologramShield3D({
       ringMat1.color.copy(currentColor);
       ringMat2.color.copy(currentColor);
 
-      // Smooth Mouse Rotation Lerp
+      // Smooth Mouse/Touch Rotation Lerp
       stateRef.current.mouse.x += (stateRef.current.mouse.targetX - stateRef.current.mouse.x) * 0.05;
       stateRef.current.mouse.y += (stateRef.current.mouse.targetY - stateRef.current.mouse.y) * 0.05;
 
@@ -274,7 +293,9 @@ export default function CyberHologramShield3D({
 
     return () => {
       cancelAnimationFrame(animId);
-      container.removeEventListener("mousemove", handleMouseMove);
+      canvas.removeEventListener("webglcontextlost", handleContextLost);
+      canvas.removeEventListener("webglcontextrestored", handleContextRestored);
+      container.removeEventListener("pointermove", handlePointerMove);
       resizeObserver.disconnect();
 
       // Clean Three.js resources
@@ -289,6 +310,11 @@ export default function CyberHologramShield3D({
       ringMat2.dispose();
       arcGeometry.dispose();
       arcMaterial.dispose();
+
+      while (scene.children.length > 0) {
+        scene.remove(scene.children[0]);
+      }
+
       renderer.dispose();
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
@@ -297,14 +323,18 @@ export default function CyberHologramShield3D({
   }, []);
 
   return (
-    <div className={`relative w-full h-full min-h-[280px] flex items-center justify-center select-none ${className}`}>
-      {/* 3D WebGL Canvas Mount */}
-      <div ref={containerRef} className="w-full h-full absolute inset-0 cursor-crosshair" />
+    <div className={`relative w-full h-full min-h-[260px] flex items-center justify-center select-none ${className}`}>
+      {/* 3D WebGL Canvas Mount with touch-action: none */}
+      <div 
+        ref={containerRef} 
+        className="w-full h-full absolute inset-0 cursor-crosshair" 
+        style={{ touchAction: "none" }}
+      />
 
       {/* Cyber Reticle HUD Overlay */}
       <div className="absolute inset-2 pointer-events-none flex flex-col justify-between text-[9px] font-mono tracking-widest text-slate-500">
         <div className="flex justify-between items-center">
-          <span className="flex items-center gap-1.5 text-cyan-400">
+          <span className="flex items-center gap-1.5 text-cyan-400 font-bold">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
             HOLOSHIELD_V2
           </span>
@@ -312,7 +342,7 @@ export default function CyberHologramShield3D({
         </div>
         <div className="flex justify-between items-center">
           <span>FPS: 60 [SYNC]</span>
-          <span className={level === "CRITICAL" ? "text-red-400 font-bold animate-pulse" : "text-emerald-400"}>
+          <span className={level === "CRITICAL" ? "text-red-400 font-bold animate-pulse" : "text-emerald-400 font-bold"}>
             DEFENSE: {level}
           </span>
         </div>

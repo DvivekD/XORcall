@@ -30,6 +30,7 @@ export default function AudioFrequencyRibbon3D({
     if (!container) return;
 
     let animId: number;
+    let isContextLost = false;
     const width = container.clientWidth || 500;
     const height = container.clientHeight || 280;
 
@@ -37,7 +38,7 @@ export default function AudioFrequencyRibbon3D({
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x060911, 0.12);
 
-    const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(55, Math.max(0.1, width / (height || 1)), 0.1, 100);
     camera.position.set(0, 2.2, 5.5);
     camera.lookAt(0, -0.2, 0);
 
@@ -47,8 +48,24 @@ export default function AudioFrequencyRibbon3D({
       powerPreference: "high-performance"
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     container.appendChild(renderer.domElement);
+
+    // Context Loss Handlers
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      isContextLost = true;
+      if (animId) cancelAnimationFrame(animId);
+    };
+
+    const handleContextRestored = () => {
+      isContextLost = false;
+      animate();
+    };
+
+    const canvas = renderer.domElement;
+    canvas.addEventListener("webglcontextlost", handleContextLost, false);
+    canvas.addEventListener("webglcontextrestored", handleContextRestored, false);
 
     // 1. Procedural 3D Plane Mesh for Frequency Landscape
     const cols = 50;
@@ -56,15 +73,9 @@ export default function AudioFrequencyRibbon3D({
     const planeGeo = new THREE.PlaneGeometry(8, 12, cols - 1, rows - 1);
     planeGeo.rotateX(-Math.PI / 2);
 
-    // Save initial vertex positions
     const posAttr = planeGeo.attributes.position as THREE.BufferAttribute;
     const vertexCount = posAttr.count;
-    const originalY = new Float32Array(vertexCount);
-    for (let i = 0; i < vertexCount; i++) {
-      originalY[i] = posAttr.getY(i);
-    }
 
-    // Dynamic Wireframe Material with glowing additive blend
     const planeMat = new THREE.MeshBasicMaterial({
       color: 0x06b6d4,
       wireframe: true,
@@ -102,13 +113,15 @@ export default function AudioFrequencyRibbon3D({
     const critColor = new THREE.Color(0xef4444); // Crimson
     const currentColor = new THREE.Color(0x06b6d4);
 
-    // Mouse Tracking
-    const handleMouseMove = (e: MouseEvent) => {
+    // Unified Pointer Tracking (Touch + Mouse)
+    const handlePointerMove = (e: PointerEvent) => {
       const rect = container.getBoundingClientRect();
-      stateRef.current.mouseX = ((e.clientX - rect.left) / rect.width - 0.5) * 1.5;
-      stateRef.current.mouseY = ((e.clientY - rect.top) / rect.height - 0.5) * 0.8;
+      if (rect.width > 0 && rect.height > 0) {
+        stateRef.current.mouseX = ((e.clientX - rect.left) / rect.width - 0.5) * 1.5;
+        stateRef.current.mouseY = ((e.clientY - rect.top) / rect.height - 0.5) * 0.8;
+      }
     };
-    container.addEventListener("mousemove", handleMouseMove);
+    container.addEventListener("pointermove", handlePointerMove);
 
     // Resize Handler
     const resizeObserver = new ResizeObserver((entries) => {
@@ -124,10 +137,11 @@ export default function AudioFrequencyRibbon3D({
     });
     resizeObserver.observe(container);
 
-    let clock = new THREE.Clock();
+    const clock = new THREE.Clock();
 
     // 60 FPS Render loop
     const animate = () => {
+      if (isContextLost) return;
       animId = requestAnimationFrame(animate);
       const elapsed = clock.getElapsedTime();
       const { isActive, amplitude, threatLevel, mouseX, mouseY } = stateRef.current;
@@ -185,12 +199,20 @@ export default function AudioFrequencyRibbon3D({
 
     return () => {
       cancelAnimationFrame(animId);
-      container.removeEventListener("mousemove", handleMouseMove);
+      canvas.removeEventListener("webglcontextlost", handleContextLost);
+      canvas.removeEventListener("webglcontextrestored", handleContextRestored);
+      container.removeEventListener("pointermove", handlePointerMove);
       resizeObserver.disconnect();
+
       planeGeo.dispose();
       planeMat.dispose();
       sparkGeo.dispose();
       sparkMat.dispose();
+
+      while (scene.children.length > 0) {
+        scene.remove(scene.children[0]);
+      }
+
       renderer.dispose();
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
@@ -199,9 +221,13 @@ export default function AudioFrequencyRibbon3D({
   }, []);
 
   return (
-    <div className={`relative w-full h-[260px] rounded-2xl overflow-hidden glass-panel border border-slate-800 ${className}`}>
-      {/* Three.js Canvas */}
-      <div ref={containerRef} className="w-full h-full cursor-pointer" />
+    <div className={`relative w-full h-[260px] rounded-2xl overflow-hidden glass-panel border border-slate-800 select-none ${className}`}>
+      {/* Three.js Canvas Mount */}
+      <div 
+        ref={containerRef} 
+        className="w-full h-full cursor-pointer" 
+        style={{ touchAction: "none" }}
+      />
 
       {/* Futuristic Audio Spectrogram HUD */}
       <div className="absolute top-3 left-4 right-4 pointer-events-none flex items-center justify-between text-[10px] font-mono">
@@ -215,7 +241,7 @@ export default function AudioFrequencyRibbon3D({
           <span>SAMPLING: 16 kHz PCM</span>
           <span className="text-cyan-400 font-bold">FFT CHANNELS: 128</span>
           <span className="text-slate-600">|</span>
-          <span className={threatLevel === "CRITICAL" ? "text-red-400 font-bold" : "text-emerald-400"}>
+          <span className={threatLevel === "CRITICAL" ? "text-red-400 font-bold" : "text-emerald-400 font-bold"}>
             STATUS: {isActive ? "SYNCHRONIZED" : "STANDBY"}
           </span>
         </div>
