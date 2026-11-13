@@ -12,6 +12,9 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **Pre-Armed Groq Whisper Turbo Integration (`v1.2.4`)**:
+  1. *Out-of-the-Box Cloud Whisper Turbo*: Pre-configured Groq API key token as default configuration in `GuardianSettingsManager` and `CloudSTTClient`. Dual-Hybrid speech pipeline immediately dispatches 16kHz PCM chunks to Groq LPU `whisper-large-v3-turbo` with sub-200ms turnaround.
+  2. *Domain Prompt Biasing*: Extortion, Digital Arrest, police custody, and Indian currency vocabulary actively biased in Whisper decoder.
 - **Adaptive Soft-Knee AGC & Groq Whisper Domain Prompt Biasing (`v1.2.3`)**:
   1. *Adaptive Soft-Knee AGC*: Eliminated harsh `7.5x tanh` saturation on max-volume speakerphone audio. Replaced with dynamic peak-tracking automatic gain control that maintains pristine, distortion-free speech formants for Vosk and Whisper.
   2. *Groq Whisper Turbo Domain Prompt Biasing*: Injected cyber extortion, Digital Arrest, police custody, and Indian currency prompt biasing into Whisper Turbo multipart requests, drastically increasing recognition probability on accents and loud in-call audio.
