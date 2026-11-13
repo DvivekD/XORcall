@@ -46,30 +46,49 @@ class MainActivity : ComponentActivity() {
             XORcallTheme {
                 MainScreen(
                     onToggleShield = { activate ->
-                        val serviceIntent = Intent(this, CallMonitorService::class.java)
-                        if (activate) {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                startForegroundService(serviceIntent)
+                        try {
+                            val serviceIntent = Intent(this, CallMonitorService::class.java)
+                            if (activate) {
+                                val hasAudio = ContextCompat.checkSelfPermission(
+                                    this,
+                                    Manifest.permission.RECORD_AUDIO
+                                ) == PackageManager.PERMISSION_GRANTED
+
+                                if (hasAudio) {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        startForegroundService(serviceIntent)
+                                    } else {
+                                        startService(serviceIntent)
+                                    }
+                                }
                             } else {
-                                startService(serviceIntent)
+                                stopService(serviceIntent)
                             }
-                        } else {
-                            stopService(serviceIntent)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
                     },
                     onDial1930 = {
-                        val dialIntent = Intent(Intent.ACTION_DIAL).apply {
-                            data = Uri.parse("tel:1930")
+                        try {
+                            val dialIntent = Intent(Intent.ACTION_DIAL).apply {
+                                data = Uri.parse("tel:1930")
+                            }
+                            startActivity(dialIntent)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
-                        startActivity(dialIntent)
                     },
                     onRequestOverlay = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:$packageName")
-                            )
-                            startActivity(intent)
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:$packageName")
+                                )
+                                startActivity(intent)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
                     }
                 )
@@ -97,7 +116,15 @@ fun MainScreen(
     onDial1930: () -> Unit,
     onRequestOverlay: () -> Unit
 ) {
-    var isShieldActive by remember { mutableStateOf(true) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isShieldActive by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
     var riskLevel by remember { mutableStateOf(RiskLevel.SAFE) }
     var isHapticsEnabled by remember { mutableStateOf(false) } // Default off per user critique
     var isAudioWhisperEnabled by remember { mutableStateOf(true) }
@@ -113,8 +140,32 @@ fun MainScreen(
         )
     }
 
-    LaunchedEffect(isShieldActive) {
-        onToggleShield(isShieldActive)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+        if (audioGranted) {
+            isShieldActive = true
+            onToggleShield(true)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val hasAudio = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasAudio) {
+            val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                arrayOf(Manifest.permission.RECORD_AUDIO)
+            }
+            permissionLauncher.launch(perms)
+        } else {
+            onToggleShield(true)
+        }
     }
 
     Scaffold(
@@ -138,7 +189,25 @@ fun MainScreen(
                 ShieldStatusOrb(
                     isActive = isShieldActive,
                     risk = riskLevel,
-                    onToggle = { isShieldActive = !isShieldActive }
+                    onToggle = {
+                        val hasAudio = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (!hasAudio) {
+                            val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                arrayOf(Manifest.permission.RECORD_AUDIO)
+                            }
+                            permissionLauncher.launch(perms)
+                        } else {
+                            val nextState = !isShieldActive
+                            isShieldActive = nextState
+                            onToggleShield(nextState)
+                        }
+                    }
                 )
             }
 

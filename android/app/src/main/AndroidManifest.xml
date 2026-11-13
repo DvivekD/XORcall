@@ -4,6 +4,7 @@
     <!-- Audio Ingestion & Sensory Haptics -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
     <!-- Proximity Sensor & Foreground Service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

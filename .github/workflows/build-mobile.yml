@@ -39,25 +39,26 @@ jobs:
       - name: Copy & Rename APK
         run: |
           mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.0-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.1-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.0.0-debug.apk
+          path: build-artifacts/XORcall-v1.0.1-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0-apk
-          name: "XORcall v1.0.0 Android APK"
+          tag_name: v1.0.1-apk
+          name: "XORcall v1.0.1 Android APK (Vivo/Android 14 Crash Fix)"
           body: |
-            ### XORcall Autonomous Real-Time Cyber Safety Guardian
-            - On-Device Sherpa-ONNX streaming Zipformer STT
-            - Proximity-aware Taptic Haptics & Audio Whisper
-            - Package Watchdog Trojan Killer (AnyDesk/RustDesk)
-            - 1-Click 1930 Cybercrime Helpline Speed Dial
-          files: build-artifacts/XORcall-v1.0.0-debug.apk
+            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.1
+            - Fixed: SecurityException on cold launch by requesting RECORD_AUDIO & POST_NOTIFICATIONS runtime permissions before starting Foreground Service.
+            - Added: Resilient try-catch error boundary around Vivo / OEM background service & floating overlays.
+            - On-Device streaming acoustic analyzer & VAD.
+            - Proximity-aware sensory engine & Package Watchdog Trojan Killer.
+            - 1-Click 1930 Cybercrime Helpline Speed Dial.
+          files: build-artifacts/XORcall-v1.0.1-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

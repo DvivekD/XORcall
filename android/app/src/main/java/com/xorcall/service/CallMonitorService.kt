@@ -5,12 +5,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.xorcall.engine.RiskLevel
 import com.xorcall.engine.SherpaSTTManager
 import com.xorcall.engine.TapticHapticEngine
@@ -42,27 +45,61 @@ class CallMonitorService : Service(), TelemetryListener {
 
     override fun onCreate() {
         super.onCreate()
-        hapticEngine = TapticHapticEngine(this)
-        hapticEngine.startListening()
+        try {
+            hapticEngine = TapticHapticEngine(this)
+            hapticEngine.startListening()
 
-        sttManager = SherpaSTTManager(assets)
-        sttManager.initialize()
+            sttManager = SherpaSTTManager(assets)
+            sttManager.initialize()
 
-        floatingOverlay = FloatingAlertOverlay(this)
-        packageWatchdog = PackageWatchdog(this)
+            floatingOverlay = FloatingAlertOverlay(this)
+            packageWatchdog = PackageWatchdog(this)
 
-        webSocketClient = TelemetryWebSocketClient("ws://10.0.2.2:8000", this)
-        webSocketClient?.connect("ANDROID-SESSION-${System.currentTimeMillis()}")
+            webSocketClient = TelemetryWebSocketClient("ws://10.0.2.2:8000", this)
+            try {
+                webSocketClient?.connect("ANDROID-SESSION-${System.currentTimeMillis()}")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
 
-        createNotificationChannel()
-        val notification = buildForegroundNotification("Kavach Shield Active - Monitoring In-Call Audio")
-        startForeground(NOTIFICATION_ID, notification)
+            createNotificationChannel()
+            val notification = buildForegroundNotification("Kavach Shield Active - Monitoring In-Call Audio")
+            
+            val hasMicPermission = ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
 
-        startAudioCapture()
-        startWatchdogLoop()
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    if (hasMicPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                    } else {
+                        startForeground(NOTIFICATION_ID, notification)
+                    }
+                } else {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            if (hasMicPermission) {
+                startAudioCapture()
+            }
+            startWatchdogLoop()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun startAudioCapture() {
+        val hasMicPermission = ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasMicPermission) return
+
         try {
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
@@ -72,28 +109,30 @@ class CallMonitorService : Service(), TelemetryListener {
                 bufferSize
             )
 
-            audioRecord?.startRecording()
-            isRecording = true
+            if (audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
+                audioRecord?.startRecording()
+                isRecording = true
 
-            scope.launch {
-                val shortBuffer = ShortArray(1600) // 100ms at 16kHz
-                val floatBuffer = FloatArray(1600)
+                scope.launch {
+                    val shortBuffer = ShortArray(1600) // 100ms at 16kHz
+                    val floatBuffer = FloatArray(1600)
 
-                while (isActive && isRecording) {
-                    val readCount = audioRecord?.read(shortBuffer, 0, shortBuffer.size) ?: 0
-                    if (readCount > 0) {
-                        for (i in 0 until readCount) {
-                            floatBuffer[i] = shortBuffer[i] / 32768.0f
-                        }
-                        sttManager.acceptAudioChunk(floatBuffer) { text, isEndpoint ->
-                            if (text.isNotBlank() && isEndpoint) {
-                                webSocketClient?.sendUtterance(text)
+                    while (isActive && isRecording) {
+                        val readCount = audioRecord?.read(shortBuffer, 0, shortBuffer.size) ?: 0
+                        if (readCount > 0) {
+                            for (i in 0 until readCount) {
+                                floatBuffer[i] = shortBuffer[i] / 32768.0f
+                            }
+                            sttManager.acceptAudioChunk(floatBuffer) { text, isEndpoint ->
+                                if (text.isNotBlank() && isEndpoint) {
+                                    webSocketClient?.sendUtterance(text)
+                                }
                             }
                         }
                     }
                 }
             }
-        } catch (e: SecurityException) {
+        } catch (e: Exception) {
             e.printStackTrace()
         }
     }
@@ -101,15 +140,19 @@ class CallMonitorService : Service(), TelemetryListener {
     private fun startWatchdogLoop() {
         scope.launch {
             while (isActive) {
-                delay(1000)
-                if (packageWatchdog.isDangerousAppInForeground()) {
-                    withContext(Dispatchers.Main) {
-                        floatingOverlay.showCriticalAlert(
-                            "CRITICAL: Remote desktop tool detected during call! Blocked to protect bank accounts."
-                        ) {
-                            // On dismiss
+                delay(2000)
+                try {
+                    if (packageWatchdog.isDangerousAppInForeground()) {
+                        withContext(Dispatchers.Main) {
+                            floatingOverlay.showCriticalAlert(
+                                "CRITICAL: Remote desktop tool detected during call! Blocked to protect bank accounts."
+                            ) {
+                                // On dismiss
+                            }
                         }
                     }
+                } catch (e: Exception) {
+                    // OEM security policy bypass
                 }
             }
         }
