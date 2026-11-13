@@ -39,27 +39,27 @@ jobs:
       - name: Copy & Rename APK
         run: |
           mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.3-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.4-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.0.3-debug.apk
+          path: build-artifacts/XORcall-v1.0.4-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.3-apk
-          name: "XORcall v1.0.3 Android APK (Multi-Demographic Threat Vectors & AI Voice Detection)"
+          tag_name: v1.0.4-apk
+          name: "XORcall v1.0.4 Android APK (In-Call Audio Record, Universal Extortion & Dual Mode Roleplay)"
           body: |
-            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.3
-            - Multi-Demographic Threat Lexicon: Student (Telegram tasks/fees), Senior (Digital Arrest/FD liquidation), Corporate Professional (FedEx/TRAI/Customs).
-            - Neural Acoustic AI Synthetic Voice Clone Detector (8kHz vocoder roll-off & jitter anomaly).
-            - Smart Whitelisting: Auto-allows verified bank toll-free lines (1800 SBI, HDFC, ICICI) and emergency numbers (112, 100, 1930).
-            - Mandatory monitoring strictly on unknown callers and high-risk international numbers (+92, +880, +234, +855).
-            - Forensic Call Vault with 1-click BSA Section 63 compliant 1930 dossier generator and SHA-256 integrity proofs.
-            - Vivo V25 Pro / Android 14 full compatibility.
-          files: build-artifacts/XORcall-v1.0.3-debug.apk
+            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.4
+            - **Universal Extortion Interception**: Detects multi-million dollar ransom demands (e.g. "5 million dollar extraction"), kidnap/accident coercion, and immediate wire payment threats.
+            - **Multi-Demographic Actor Roleplay**: Full support for physical actor testing across Student (Telegram/fees/sextortion), Senior (Digital Arrest/RBI escrow/FD liquidation), and Professional (FedEx MDMA/TRAI disconnection) vectors.
+            - **Hardware AudioRecord In-Call Stream**: Continuously feeds 16kHz PCM audio to the neural vocoder AI voice clone detector and acoustic energy monitor.
+            - **Self-Healing Speech Recognizer**: Auto-recovers from Android in-call microphone contention without deadlocking.
+            - **Synchronized Guardian Settings**: Real-time SharedPreferences synchronization for Haptics, Floating HUD, Out-Of-Band In-Ear Audio Whisper (TTS), and Silent Guardian Ping.
+            - **Vivo V25 Pro / Android 14 Speakerphone Optimization**: Full dual testing support via live speakerphone calls and in-app actor roleplay microphone.
+          files: build-artifacts/XORcall-v1.0.4-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

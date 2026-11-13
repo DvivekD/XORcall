@@ -10,6 +10,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import java.util.Locale
+import kotlin.math.sqrt
 
 data class ThreatAnalysis(
     val isScamDetected: Boolean,
@@ -23,10 +24,10 @@ data class ThreatAnalysis(
 
 /**
  * SherpaSTTManager
- * Multi-Engine on-device speech processor:
- * 1. Hardware acoustic Neural Vocoder VAD & Synthetic AI Voice Detector.
- * 2. Multi-Demographic Lexicon Spotter (Student, Senior Citizen, Working Professional).
- * 3. Real-time Android SpeechRecognizer for continuous live spoken word extraction.
+ * Dual-Engine real-time speech and acoustic analysis engine:
+ * 1. Hardware PCM acoustic stream analysis for AI Voice Clones & Vocoder artifacts.
+ * 2. Continuous Speech Recognizer with self-healing recovery loop on Android.
+ * 3. Multi-Demographic Lexicon Spotter (Universal, Student, Senior, Working Professional).
  */
 class SherpaSTTManager(
     private val assetManager: AssetManager,
@@ -43,104 +44,132 @@ class SherpaSTTManager(
     var activeScope: DemographicVector = DemographicVector.ALL
     var onThreatDetected: ((analysis: ThreatAnalysis, transcript: String) -> Unit)? = null
     var onAcousticResult: ((result: AcousticAnalysisResult) -> Unit)? = null
+    var onLiveTranscriptUpdate: ((transcript: String, isEndpoint: Boolean) -> Unit)? = null
 
     fun initialize(modelPath: String = "sherpa-onnx-streaming-zipformer-en") {
-        try {
-            isInitialized = true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            isInitialized = true
-        }
+        isInitialized = true
     }
 
     /**
-     * Start continuous live voice recognition using Android's on-device speech recognizer.
+     * Start continuous live voice recognition using Android's speech recognizer.
+     * Includes self-healing recovery on errors (such as in-call microphone contention).
      */
     fun startContinuousListening(onTranscript: (text: String, isEndpoint: Boolean) -> Unit) {
         val ctx = context ?: return
+        this.onLiveTranscriptUpdate = onTranscript
+        isListening = true
+
         mainHandler.post {
-            try {
-                if (SpeechRecognizer.isRecognitionAvailable(ctx)) {
-                    speechRecognizer?.destroy()
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(ctx).apply {
-                        setRecognitionListener(object : RecognitionListener {
-                            override fun onReadyForSpeech(params: Bundle?) {}
-                            override fun onBeginningOfSpeech() {}
-                            override fun onRmsChanged(rmsdB: Float) {}
-                            override fun onBufferReceived(buffer: ByteArray?) {}
-                            override fun onEndOfSpeech() {}
+            createAndStartRecognizer(ctx)
+        }
+    }
 
-                            override fun onError(error: Int) {
-                                if (isListening) {
-                                    mainHandler.postDelayed({
-                                        startListeningInternal(onTranscript)
-                                    }, 600)
-                                }
-                            }
+    private fun createAndStartRecognizer(ctx: Context) {
+        if (!isListening) return
 
-                            override fun onResults(results: Bundle?) {
-                                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                                val text = matches?.firstOrNull() ?: ""
-                                if (text.isNotBlank()) {
-                                    onTranscript(text, true)
-                                    val analysis = analyzeText(text, activeScope)
-                                    if (analysis.isScamDetected) {
-                                        onThreatDetected?.invoke(analysis, text)
+        try {
+            cleanupRecognizer()
+
+            if (SpeechRecognizer.isRecognitionAvailable(ctx)) {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(ctx).apply {
+                    setRecognitionListener(object : RecognitionListener {
+                        override fun onReadyForSpeech(params: Bundle?) {}
+                        override fun onBeginningOfSpeech() {}
+                        override fun onRmsChanged(rmsdB: Float) {}
+                        override fun onBufferReceived(buffer: ByteArray?) {}
+                        override fun onEndOfSpeech() {}
+
+                        override fun onError(error: Int) {
+                            // Self-healing recovery: destroy and recreate cleanly
+                            if (isListening) {
+                                mainHandler.postDelayed({
+                                    if (isListening) {
+                                        createAndStartRecognizer(ctx)
                                     }
-                                }
-                                if (isListening) {
-                                    startListeningInternal(onTranscript)
+                                }, 800)
+                            }
+                        }
+
+                        override fun onResults(results: Bundle?) {
+                            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            val text = matches?.firstOrNull() ?: ""
+                            if (text.isNotBlank()) {
+                                onLiveTranscriptUpdate?.invoke(text, true)
+                                val analysis = analyzeText(text, activeScope)
+                                if (analysis.isScamDetected) {
+                                    onThreatDetected?.invoke(analysis, text)
                                 }
                             }
-
-                            override fun onPartialResults(partialResults: Bundle?) {
-                                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                                val text = matches?.firstOrNull() ?: ""
-                                if (text.isNotBlank()) {
-                                    onTranscript(text, false)
-                                    val analysis = analyzeText(text, activeScope)
-                                    if (analysis.isScamDetected) {
-                                        onThreatDetected?.invoke(analysis, text)
+                            if (isListening) {
+                                mainHandler.postDelayed({
+                                    if (isListening) {
+                                        startListeningIntent()
                                     }
+                                }, 300)
+                            }
+                        }
+
+                        override fun onPartialResults(partialResults: Bundle?) {
+                            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            val text = matches?.firstOrNull() ?: ""
+                            if (text.isNotBlank()) {
+                                onLiveTranscriptUpdate?.invoke(text, false)
+                                val analysis = analyzeText(text, activeScope)
+                                if (analysis.isScamDetected) {
+                                    onThreatDetected?.invoke(analysis, text)
                                 }
                             }
+                        }
 
-                            override fun onEvent(eventType: Int, params: Bundle?) {}
-                        })
-                    }
-                    isListening = true
-                    startListeningInternal(onTranscript)
+                        override fun onEvent(eventType: Int, params: Bundle?) {}
+                    })
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+                startListeningIntent()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (isListening) {
+                mainHandler.postDelayed({
+                    if (isListening) createAndStartRecognizer(ctx)
+                }, 1200)
             }
         }
     }
 
-    private fun startListeningInternal(onTranscript: (text: String, isEndpoint: Boolean) -> Unit) {
+    private fun startListeningIntent() {
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
             }
             speechRecognizer?.startListening(intent)
         } catch (e: Exception) {
             e.printStackTrace()
+            val ctx = context ?: return
+            if (isListening) {
+                mainHandler.postDelayed({
+                    if (isListening) createAndStartRecognizer(ctx)
+                }, 800)
+            }
         }
+    }
+
+    private fun cleanupRecognizer() {
+        try {
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+        } catch (_: Exception) {}
+        speechRecognizer = null
     }
 
     fun stopContinuousListening() {
         isListening = false
         mainHandler.post {
-            try {
-                speechRecognizer?.stopListening()
-                speechRecognizer?.destroy()
-                speechRecognizer = null
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            cleanupRecognizer()
         }
     }
 
@@ -161,7 +190,7 @@ class SherpaSTTManager(
         }
 
         val enrichedMessage = if (isAiVoice) {
-            "${result.threatSummary} [AI SYNTHETIC VOICE CONFIRMED]"
+            "${result.threatSummary} [AI SYNTHETIC VOICE DETECTED (${(aiConfidence * 100).toInt()}%)]"
         } else {
             result.threatSummary
         }
@@ -180,7 +209,7 @@ class SherpaSTTManager(
     /**
      * Processes PCM float audio buffer from hardware for acoustic vocoder & voice clone detection.
      */
-    fun acceptAudioChunk(samples: FloatArray, onTranscript: (text: String, isEndpoint: Boolean) -> Unit) {
+    fun acceptAudioChunk(samples: FloatArray, onTranscript: ((text: String, isEndpoint: Boolean) -> Unit)? = null) {
         if (samples.isEmpty()) return
 
         val acousticResult = syntheticDetector.analyzeAudioChunk(samples)
@@ -193,7 +222,7 @@ class SherpaSTTManager(
                 isScamDetected = true,
                 matchedKeywords = listOf("AI_VOICE_CLONE"),
                 riskLevel = RiskLevel.CRITICAL,
-                warningMessage = "🚨 CRITICAL: AI-GENERATED SYNTHETIC VOICE DETECTED ON CALL! Voice is not human.",
+                warningMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE DETECTED ON CALL! Voice is artificially generated.",
                 demographicVector = activeScope,
                 isSyntheticVoice = true,
                 syntheticConfidence = acousticResult.syntheticConfidence

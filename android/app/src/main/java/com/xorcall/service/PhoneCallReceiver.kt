@@ -39,7 +39,7 @@ class PhoneCallReceiver : BroadcastReceiver() {
                     return
                 }
 
-                // If unknown number or international spoof -> Mandatory Monitoring
+                // If unknown number or international spoof -> Send Caller Info to Monitor Service
                 val hasAudio = ContextCompat.checkSelfPermission(
                     context,
                     android.Manifest.permission.RECORD_AUDIO
@@ -61,13 +61,13 @@ class PhoneCallReceiver : BroadcastReceiver() {
                     }
                 }
             } else if (state == TelephonyManager.EXTRA_STATE_IDLE) {
-                // Call ended: stop monitoring service to preserve 0% idle battery
-                val stopIntent = Intent(context, CallMonitorService::class.java)
-                try {
-                    context.stopService(stopIntent)
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                // Call ended: Notify service of call completion without tearing down the protective shield
+                val idleIntent = Intent(context, CallMonitorService::class.java).apply {
+                    putExtra("EXTRA_CALL_STATE", "IDLE")
                 }
+                try {
+                    context.startService(idleIntent)
+                } catch (_: Exception) {}
             }
         }
     }

@@ -126,10 +126,18 @@ fun MainScreen(
     onRequestOverlay: () -> Unit
 ) {
     val context = LocalContext.current
-    val hapticEngine = remember { TapticHapticEngine(context).apply { isHapticsEnabled = true } }
+    val settingsManager = remember { GuardianSettingsManager(context) }
+    val hapticEngine = remember { TapticHapticEngine(context).apply { isHapticsEnabled = settingsManager.isHapticsEnabled } }
+    val whisperEngine = remember { AudioWhisperEngine(context) }
+    val guardianPingManager = remember { GuardianPingManager(context) }
     val floatingOverlay = remember { FloatingAlertOverlay(context) }
     val historyManager = remember { CallHistoryManager(context) }
-    val sttManager = remember { SherpaSTTManager(context.assets, context).apply { initialize() } }
+    val sttManager = remember { 
+        SherpaSTTManager(context.assets, context).apply { 
+            initialize() 
+            activeScope = settingsManager.activeVector
+        } 
+    }
 
     var isShieldActive by remember {
         mutableStateOf(
@@ -140,16 +148,16 @@ fun MainScreen(
         )
     }
     var riskLevel by remember { mutableStateOf(RiskLevel.SAFE) }
-    var activeVector by remember { mutableStateOf(DemographicVector.ALL) }
-    var isHapticsEnabled by remember { mutableStateOf(true) }
-    var isAudioWhisperEnabled by remember { mutableStateOf(true) }
-    var isFamilyPingEnabled by remember { mutableStateOf(true) }
-    var isBannerEnabled by remember { mutableStateOf(true) }
-    var isWhitelistContactsEnabled by remember { mutableStateOf(true) }
-    var isAutoAllowBanksEnabled by remember { mutableStateOf(true) }
-    var isAiVoiceDetectionArmed by remember { mutableStateOf(true) }
+    var activeVector by remember { mutableStateOf(settingsManager.activeVector) }
+    var isHapticsEnabled by remember { mutableStateOf(settingsManager.isHapticsEnabled) }
+    var isAudioWhisperEnabled by remember { mutableStateOf(settingsManager.isAudioWhisperEnabled) }
+    var isFamilyPingEnabled by remember { mutableStateOf(settingsManager.isFamilyPingEnabled) }
+    var isBannerEnabled by remember { mutableStateOf(settingsManager.isBannerEnabled) }
+    var isWhitelistContactsEnabled by remember { mutableStateOf(settingsManager.isWhitelistContactsEnabled) }
+    var isAutoAllowBanksEnabled by remember { mutableStateOf(settingsManager.isAutoAllowBanksEnabled) }
+    var isAiVoiceDetectionArmed by remember { mutableStateOf(settingsManager.isAiVoiceDetectionArmed) }
 
-    var liveTranscript by remember { mutableStateOf("Ready. Monitoring unknown & international calls...") }
+    var liveTranscript by remember { mutableStateOf("Ready. Monitoring unknown callers for extortion & AI clones...") }
     var lastThreatMessage by remember { mutableStateOf<String?>(null) }
     var lastAiVoiceStatus by remember { mutableStateOf<String?>(null) }
     var dossierPreviewDialog by remember { mutableStateOf<String?>(null) }
@@ -184,6 +192,16 @@ fun MainScreen(
                     if (isBannerEnabled) {
                         floatingOverlay.showCriticalAlert(analysis.warningMessage)
                     }
+                    if (isAudioWhisperEnabled) {
+                        whisperEngine.speakWarning(analysis.warningMessage)
+                    }
+                    if (isFamilyPingEnabled) {
+                        guardianPingManager.sendSilentGuardianPing(
+                            callerNumber = "Live Voice Mic Test",
+                            threatSummary = analysis.warningMessage,
+                            vector = analysis.demographicVector
+                        )
+                    }
                     historyManager.recordCall(
                         callerNumber = "Live Voice Mic Test",
                         callerClassification = "MICROPHONE_TEST",
@@ -197,6 +215,7 @@ fun MainScreen(
                     refreshHistory()
                 } else {
                     riskLevel = RiskLevel.SAFE
+                    Toast.makeText(context, "🟢 Normal speech: No extortion markers detected.", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -310,12 +329,18 @@ fun MainScreen(
                 HeaderSection()
             }
 
+            // SPEAKERPHONE TESTING ADVISORY
+            item {
+                SpeakerphoneTipCard()
+            }
+
             // DEMOGRAPHIC VECTOR SELECTOR TABS
             item {
                 DemographicVectorSelector(
                     activeVector = activeVector,
                     onSelectVector = {
                         activeVector = it
+                        settingsManager.activeVector = it
                         sttManager.activeScope = it
                     }
                 )
@@ -352,11 +377,20 @@ fun MainScreen(
             item {
                 SmartWhitelistingCard(
                     whitelistContacts = isWhitelistContactsEnabled,
-                    onToggleWhitelistContacts = { isWhitelistContactsEnabled = it },
+                    onToggleWhitelistContacts = {
+                        isWhitelistContactsEnabled = it
+                        settingsManager.isWhitelistContactsEnabled = it
+                    },
                     allowOfficialBanks = isAutoAllowBanksEnabled,
-                    onToggleAllowOfficialBanks = { isAutoAllowBanksEnabled = it },
+                    onToggleAllowOfficialBanks = {
+                        isAutoAllowBanksEnabled = it
+                        settingsManager.isAutoAllowBanksEnabled = it
+                    },
                     aiVoiceArmed = isAiVoiceDetectionArmed,
-                    onToggleAiVoice = { isAiVoiceDetectionArmed = it }
+                    onToggleAiVoice = {
+                        isAiVoiceDetectionArmed = it
+                        settingsManager.isAiVoiceDetectionArmed = it
+                    }
                 )
             }
 
@@ -371,12 +405,25 @@ fun MainScreen(
                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Test speech for ${activeVector.name} vector...")
+                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak extortion phrase (Actor Roleplay)...")
                             }
                             voiceInputLauncher.launch(intent)
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
+                    },
+                    onTriggerUniversalExtortion = {
+                        val sample = "We have seized your records. Wire 5 million dollar extraction immediately or face severe consequences and arrest."
+                        liveTranscript = "“$sample”"
+                        val analysis = sttManager.analyzeText(sample, activeVector)
+                        riskLevel = RiskLevel.CRITICAL
+                        lastThreatMessage = analysis.warningMessage
+                        if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
+                        if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                        if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+                        if (isFamilyPingEnabled) guardianPingManager.sendSilentGuardianPing("+1 800 555 0199", analysis.warningMessage, activeVector)
+                        historyManager.recordCall("+1 800 555 0199", "EXTORTION_RANSOM_DEMAND", analysis.demographicVector, RiskLevel.CRITICAL, false, 0f, analysis.matchedKeywords, sample)
+                        refreshHistory()
                     },
                     onTriggerStudentScam = {
                         val sample = "Telegram part-time review job: Like YouTube videos to earn ₹5,000. Balance frozen! Recharge crypto wallet with ₹40,000 USDT to release payout."
@@ -386,6 +433,8 @@ fun MainScreen(
                         lastThreatMessage = analysis.warningMessage
                         if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
                         if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                        if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+                        if (isFamilyPingEnabled) guardianPingManager.sendSilentGuardianPing("+91 98765 43210", analysis.warningMessage, DemographicVector.STUDENT)
                         historyManager.recordCall("+91 98765 43210", "UNKNOWN_TASK_SCAMMER", DemographicVector.STUDENT, RiskLevel.CRITICAL, false, 0f, analysis.matchedKeywords, sample)
                         refreshHistory()
                     },
@@ -397,6 +446,8 @@ fun MainScreen(
                         lastThreatMessage = analysis.warningMessage
                         if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
                         if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                        if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+                        if (isFamilyPingEnabled) guardianPingManager.sendSilentGuardianPing("+92 300 1234567", analysis.warningMessage, DemographicVector.SENIOR)
                         historyManager.recordCall("+92 300 1234567", "HIGH_RISK_DIGITAL_ARREST", DemographicVector.SENIOR, RiskLevel.CRITICAL, false, 0f, analysis.matchedKeywords, sample)
                         refreshHistory()
                     },
@@ -408,6 +459,8 @@ fun MainScreen(
                         lastThreatMessage = analysis.warningMessage
                         if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
                         if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                        if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+                        if (isFamilyPingEnabled) guardianPingManager.sendSilentGuardianPing("+44 70 98765432", analysis.warningMessage, DemographicVector.PROFESSIONAL)
                         historyManager.recordCall("+44 70 98765432", "VOIP_FEDEX_IMPOSTER", DemographicVector.PROFESSIONAL, RiskLevel.CRITICAL, false, 0f, analysis.matchedKeywords, sample)
                         refreshHistory()
                     },
@@ -428,6 +481,8 @@ fun MainScreen(
                         lastThreatMessage = analysis.warningMessage
                         if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
                         if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                        if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+                        if (isFamilyPingEnabled) guardianPingManager.sendSilentGuardianPing("+91 88888 99999", analysis.warningMessage, DemographicVector.ALL)
                         historyManager.recordCall("+91 88888 99999", "UNKNOWN_AI_CLONE", DemographicVector.ALL, RiskLevel.CRITICAL, true, 0.94f, analysis.matchedKeywords, sample)
                         refreshHistory()
                     },
@@ -450,15 +505,23 @@ fun MainScreen(
                     haptics = isHapticsEnabled,
                     onToggleHaptics = { 
                         isHapticsEnabled = it 
+                        settingsManager.isHapticsEnabled = it
                         hapticEngine.isHapticsEnabled = it
                     },
                     whisper = isAudioWhisperEnabled,
-                    onToggleWhisper = { isAudioWhisperEnabled = it },
+                    onToggleWhisper = { 
+                        isAudioWhisperEnabled = it 
+                        settingsManager.isAudioWhisperEnabled = it
+                    },
                     familyPing = isFamilyPingEnabled,
-                    onToggleFamilyPing = { isFamilyPingEnabled = it },
+                    onToggleFamilyPing = { 
+                        isFamilyPingEnabled = it 
+                        settingsManager.isFamilyPingEnabled = it
+                    },
                     banner = isBannerEnabled,
                     onToggleBanner = { 
                         isBannerEnabled = it 
+                        settingsManager.isBannerEnabled = it
                         onRequestOverlay()
                     }
                 )
@@ -512,6 +575,38 @@ fun MainScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun SpeakerphoneTipCard() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF1E1B4B))
+            .border(1.dp, Color(0xFF4338CA), RoundedCornerShape(10.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("🔊", fontSize = 18.sp)
+        Spacer(modifier = Modifier.width(10.dp))
+        Column {
+            Text(
+                text = "IN-CALL AUDIO TIP (VIVO / ANDROID 14)",
+                color = Color(0xFFA5B4FC),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "When your friend calls, keep the call on Speakerphone (Hands-Free) so the microphone ingests and transcribes both sides of the conversation in real-time.",
+                color = Color(0xFFE0E7FF),
+                fontSize = 10.sp,
+                lineHeight = 14.sp
+            )
+        }
     }
 }
 
@@ -613,6 +708,7 @@ fun DemographicThreatTesterCard(
     liveTranscript: String,
     aiVoiceStatus: String?,
     onVoiceTestClick: () -> Unit,
+    onTriggerUniversalExtortion: () -> Unit,
     onTriggerStudentScam: () -> Unit,
     onTriggerSeniorScam: () -> Unit,
     onTriggerProfessionalScam: () -> Unit,
@@ -634,7 +730,7 @@ fun DemographicThreatTesterCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "INTERCEPT CONSOLE & VECTOR INJECTION",
+                text = "INTERCEPT CONSOLE & ACTOR ROLEPLAY",
                 color = Color(0xFF38BDF8),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -690,16 +786,25 @@ fun DemographicThreatTesterCard(
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
             shape = RoundedCornerShape(8.dp)
         ) {
-            Text("🎙️ Speak Live Voice (Spotter Test)", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
+            Text("🎙️ Speak Live Voice (Actor Roleplay Mic)", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
         }
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Demographic Vector Simulation Buttons
+        // Row 1: Universal 5M Extortion + Student
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            Button(
+                onClick = onTriggerUniversalExtortion,
+                modifier = Modifier.weight(1.2f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF991B1B)),
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+            ) {
+                Text("💰 5M $ Extort", fontSize = 9.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
+            }
             Button(
                 onClick = onTriggerStudentScam,
                 modifier = Modifier.weight(1f),
@@ -709,6 +814,15 @@ fun DemographicThreatTesterCard(
             ) {
                 Text("👨‍🎓 Student Task", fontSize = 9.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
             }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Row 2: Senior CBI + Pro FedEx
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Button(
                 onClick = onTriggerSeniorScam,
                 modifier = Modifier.weight(1f),
@@ -731,7 +845,7 @@ fun DemographicThreatTesterCard(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // AI Voice Clone & Haptic Row
+        // Row 3: AI Voice Clone + Haptics + Clear
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -928,7 +1042,7 @@ fun HeaderSection() {
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Text(
-                text = "v1.0.3-PROD",
+                text = "v1.0.4-PROD",
                 color = Color(0xFF94A3B8),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace
@@ -1095,16 +1209,16 @@ fun ModularSensoryTogglesCard(
             letterSpacing = 1.sp
         )
         Text(
-            text = "Judge Critique #3: Customizable alerts for users who dislike vibration",
+            text = "Synchronized to background service · Triggers according to what is enabled",
             color = Color(0xFF475569),
             fontSize = 9.sp
         )
         Spacer(modifier = Modifier.height(8.dp))
 
         InterventionRow("Taptic Cheek Haptics (Vibration Shockwave)", haptics, onToggleHaptics)
-        InterventionRow("In-Ear Audio Whisper (TTS)", whisper, onToggleWhisper)
+        InterventionRow("In-Ear Audio Whisper (TTS Warning)", whisper, onToggleWhisper)
         InterventionRow("Heads-Up Floating Warning Banner", banner, onToggleBanner)
-        InterventionRow("Silent Out-Of-Band Family Ping", familyPing, onToggleFamilyPing)
+        InterventionRow("Silent Out-Of-Band Family / Guardian Ping", familyPing, onToggleFamilyPing)
     }
 }
 
