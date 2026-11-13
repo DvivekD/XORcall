@@ -49,9 +49,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     
-    // On-Device Streaming Speech-to-Text (Zipformer)
-    implementation("com.k2fsa.sherpa.onnx:sherpa-onnx:1.10.30")
-    
     // Coroutines & Network WebSockets
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

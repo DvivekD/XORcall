@@ -32,7 +32,8 @@ jobs:
       - name: Build Android Debug APK
         run: |
           cd android
-          gradle assembleDebug --stacktrace
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Copy & Rename APK
         run: |
