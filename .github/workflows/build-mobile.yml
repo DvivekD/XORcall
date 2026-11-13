@@ -39,26 +39,26 @@ jobs:
       - name: Copy & Rename APK
         run: |
           mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.5-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.6-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.0.5-debug.apk
+          path: build-artifacts/XORcall-v1.0.6-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.5-apk
-          name: "XORcall v1.0.5 Android APK (Direct Call Output Interception & Zero-Google In-Process Engine)"
+          tag_name: v1.0.6-apk
+          name: "XORcall v1.0.6 Android APK (Always-On Live Speech Transcriber, Kidnap & 5 Lakhs Death Threat Interceptor)"
           body: |
-            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.5
-            - **Direct In-Call Audio Output Interception**: Intercepts the remote caller's earpiece downlink audio directly via `XORcallAccessibilityService` and hardware duplex `VOICE_COMMUNICATION` routing without requiring manual speakerphone.
-            - **Adaptive Digital AGC Pre-Amplifier**: Amplifies low-amplitude earpiece caller speech by +24dB with soft hyperbolic tangent (`tanh`) saturation limiting to prevent clipping.
-            - **Zero Google App IPC Dependency**: Completely eliminated Google App SpeechRecognizer during active calls, eliminating the "Google speech synthesis/recognition cannot record" error for good.
-            - **Multi-Demographic Roleplay Engine**: 100% reliable actor roleplay testing with custom phrase injection and instant threat verification across Universal Extortion ("5 million dollar extraction"), Student, Senior, and Corporate Professional vectors.
-            - **Synchronized Sensory Interventions**: Real-time SharedPreferences synchronization for Haptics, Floating HUD, Out-Of-Band In-Ear Audio Whisper (TTS), and Silent Guardian Ping.
-          files: build-artifacts/XORcall-v1.0.5-debug.apk
+            ### XORcall Autonomous Real-Time Cyber Safety Guardian v1.0.6
+            - **Always-On Live Speech Transcriber**: Live speech recognition activates automatically as soon as the Shield is turned ON. Words appear live in the transcript box in real time.
+            - **Expanded Kidnap & Death Threat Lexicon**: Explicit instant triggers for `"kill"`, `"killing"`, `"murder"`, `"son"`, `"daughter"`, `"hostage"`, `"kidnap"`, `"5 lakhs"`, and `"5 million dollar extraction"`.
+            - **Immediate Sensory Alert Chain**: Fires Cheek Haptic Shockwave, High-Priority Heads-Up Warning Banner, In-Ear Audio Whisper (TTS), and Silent Guardian Ping on the very first detected threat phrase.
+            - **1-Tap Roleplay Quick Button**: Added dedicated `Kidnap: 5L & Son` test button alongside `5M $ Extort`, Student, Senior, and Pro vectors.
+            - **Vivo V25 Pro / Android 14 Verified Compatibility**.
+          files: build-artifacts/XORcall-v1.0.6-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

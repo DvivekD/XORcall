@@ -17,22 +17,30 @@ data class VectorThreatResult(
 /**
  * DemographicThreatLexicon
  * Comprehensive multi-demographic lexicon and intent conjunction rules covering:
- * 1. Universal Financial Extortion & Kidnap/Accident Coercion (e.g. "5 million dollar extraction")
- * 2. Student Vector (Telegram Task Traps, Fake Semester Fees, Hall Ticket Withheld, Sextortion)
- * 3. Senior Citizen Vector (Digital Arrest, CBI/Police, Pension/KYC Suspension, FD Liquidation, RBI Escrow)
- * 4. Working Professional Vector (FedEx/Customs MDMA Parcel, TRAI Number Severing, GST/IT Raids)
+ * 1. Kidnap, Death Threats & Violent Extortion (e.g. "son", "killing", "5 lakhs", "kidnapped", "murder")
+ * 2. Universal Financial Extortion & Ransom (e.g. "5 million dollar extraction", "wire transfer")
+ * 3. Student Vector (Telegram Task Traps, Fake Semester Fees, Hall Ticket Withheld, Sextortion)
+ * 4. Senior Citizen Vector (Digital Arrest, CBI/Police, Pension/KYC Suspension, FD Liquidation, RBI Escrow)
+ * 5. Working Professional Vector (FedEx/Customs MDMA Parcel, TRAI Number Severing, GST/IT Raids)
  */
 object DemographicThreatLexicon {
 
-    // 0. Universal Financial Extortion & Kidnap / Accident Coercion (Active across ALL vectors)
+    // 0. Universal Financial Extortion, Kidnap & Death Threats (Active across ALL vectors)
     val UNIVERSAL_EXTORTION_KEYWORDS = listOf(
-        // High-denomination & currency extortion
-        "million dollar", "million dollars", "million", "millions", "dollar", "dollars",
-        "extraction", "extract money", "extortion", "extort", "ransom", "hostage", "kidnap", "kidnapped",
-        "crore", "crores", "lakh", "lakhs",
+        // Kidnapping & Violent Death Threats (User Test Vector)
+        "kill", "killing", "killed", "murder", "murdered", "shoot", "dead", "die", "death",
+        "son", "daughter", "child", "children", "kid", "kids", "brother", "sister", "mother", "father", "family",
+        "kidnap", "kidnapped", "kidnapping", "hostage", "abduct", "abducted", "in our custody", "in custody",
+        
+        // Currency & High-Denomination Demands
+        "5 lakhs", "lakh", "lakhs", "500000", "crore", "crores", "rupees", "cash", "ransom",
+        "million dollar", "million dollars", "5 million", "million", "millions", "dollar", "dollars",
+        "extraction", "extract money", "extortion", "extort",
+
         // Accident & Urgent Hospital Coercion
         "accident", "critical condition", "hospitalized", "icu", "emergency surgery",
         "police custody", "bail money", "bail amount", "custody release",
+
         // Forceful Transfer & Ultimatums
         "wire transfer", "transfer immediately", "pay immediately", "send money now",
         "pay right now", "urgent payment", "demand money", "demanding money",
@@ -115,9 +123,10 @@ object DemographicThreatLexicon {
             else -> DemographicVector.ALL
         }
 
-        // High-severity markers trigger CRITICAL immediately
+        // High-severity markers trigger CRITICAL immediately on the first phrase
         val criticalTriggers = listOf(
-            "million dollar", "million dollars", "extraction", "extort", "ransom", "kidnap", "accident",
+            "kill", "killing", "murder", "son", "daughter", "kidnap", "kidnapped", "hostage", "5 lakhs", "lakh",
+            "million dollar", "million dollars", "extraction", "extort", "ransom", "accident",
             "digital arrest", "rbi escrow", "liquidate fixed deposit", "break fd", "arrest warrant",
             "semester fee", "crypto recharge", "recharge wallet", "viral on instagram", "video call recording",
             "parcel intercepted", "fedex", "trai", "mobile disconnection", "income tax raid"
@@ -128,8 +137,7 @@ object DemographicThreatLexicon {
         }
 
         val risk = when {
-            hasCriticalKeyword || activeMatches.size >= 2 -> RiskLevel.CRITICAL
-            activeMatches.isNotEmpty() -> RiskLevel.WARN
+            hasCriticalKeyword || activeMatches.isNotEmpty() -> RiskLevel.CRITICAL
             else -> RiskLevel.SAFE
         }
 
@@ -144,12 +152,11 @@ object DemographicThreatLexicon {
                     DemographicVector.PROFESSIONAL ->
                         "🚨 CORPORATE / PARCEL EXTORTION INTERCEPTED: FedEx/TRAI coercion script spotted ('$sample'). Do NOT share funds or OTP!"
                     DemographicVector.ALL ->
-                        "🚨 CRITICAL EXTORTION DEMAND DETECTED: Coercion & ransom markers spotted ('$sample'). HANG UP IMMEDIATELY!"
+                        "🚨 CRITICAL EXTORTION / KIDNAP THREAT INTERCEPTED: Coercion & ransom demand spotted ('$sample'). HANG UP IMMEDIATELY!"
                 }
             }
             RiskLevel.WARN -> "⚠️ SUSPICIOUS CALL: Coercion keywords detected ('${activeMatches.joinToString(", ")}'). Stay alert."
             RiskLevel.SAFE -> "Normal conversation."
-            else -> "Normal conversation."
         }
 
         return VectorThreatResult(

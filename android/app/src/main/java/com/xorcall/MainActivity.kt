@@ -169,7 +169,7 @@ fun MainScreen(
     var isAiVoiceDetectionArmed by remember { mutableStateOf(settingsManager.isAiVoiceDetectionArmed) }
     var isAccessibilityActive by remember { mutableStateOf(XORcallAccessibilityService.isServiceRunning) }
 
-    var liveTranscript by remember { mutableStateOf("Ready. Direct In-Call Audio Stream Armed (Earpiece Downlink + Mic Uplink)...") }
+    var liveTranscript by remember { mutableStateOf("Ready. Speak into phone — live words will transcribe here...") }
     var lastThreatMessage by remember { mutableStateOf<String?>(null) }
     var lastAiVoiceStatus by remember { mutableStateOf<String?>(null) }
     var isAudioStreamPulsing by remember { mutableStateOf(false) }
@@ -217,6 +217,69 @@ fun MainScreen(
         }
     }
 
+    // Set threat detection callback on STT engine
+    LaunchedEffect(sttManager, activeVector, isHapticsEnabled, isBannerEnabled, isAudioWhisperEnabled, isFamilyPingEnabled) {
+        sttManager.onThreatDetected = { analysis, transcript ->
+            riskLevel = analysis.riskLevel
+            lastThreatMessage = analysis.warningMessage
+            if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
+            if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+            if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+            if (isFamilyPingEnabled) {
+                guardianPingManager.sendSilentGuardianPing("Live Spoken Words", analysis.warningMessage, analysis.demographicVector)
+            }
+            historyManager.recordCall(
+                callerNumber = "Live Spoken Words",
+                callerClassification = "SPOKEN_WORDS",
+                vector = analysis.demographicVector,
+                risk = analysis.riskLevel,
+                isSynthetic = analysis.isSyntheticVoice,
+                syntheticConfidence = analysis.syntheticConfidence,
+                keywords = analysis.matchedKeywords,
+                transcript = transcript
+            )
+            refreshHistory()
+        }
+    }
+
+    // Always-On Continuous Live Transcription when Shield is active
+    LaunchedEffect(isShieldActive, activeVector) {
+        if (isShieldActive) {
+            val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            if (hasMic) {
+                sttManager.startAlwaysOnLiveListening { text, _ ->
+                    if (text.isNotBlank()) {
+                        liveTranscript = "“$text”"
+                        val analysis = sttManager.analyzeText(text, activeVector)
+                        if (analysis.isScamDetected) {
+                            riskLevel = analysis.riskLevel
+                            lastThreatMessage = analysis.warningMessage
+                            if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
+                            if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                            if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+                            if (isFamilyPingEnabled) {
+                                guardianPingManager.sendSilentGuardianPing("Live Spoken Words", analysis.warningMessage, analysis.demographicVector)
+                            }
+                            historyManager.recordCall(
+                                callerNumber = "Live Spoken Words",
+                                callerClassification = "SPOKEN_WORDS",
+                                vector = analysis.demographicVector,
+                                risk = analysis.riskLevel,
+                                isSynthetic = analysis.isSyntheticVoice,
+                                syntheticConfidence = analysis.syntheticConfidence,
+                                keywords = analysis.matchedKeywords,
+                                transcript = text
+                            )
+                            refreshHistory()
+                        }
+                    }
+                }
+            }
+        } else {
+            sttManager.stopAlwaysOnLiveListening()
+        }
+    }
+
     // Dynamic Broadcast Receiver for incoming telephony & accessibility events
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
@@ -240,6 +303,12 @@ fun MainScreen(
                         }
                         refreshHistory()
                     }
+                    "com.xorcall.TRANSCRIPT_UPDATE" -> {
+                        val text = intent.getStringExtra("text") ?: ""
+                        if (text.isNotBlank()) {
+                            liveTranscript = "“$text”"
+                        }
+                    }
                     "com.xorcall.AUDIO_STREAM_ACTIVE" -> {
                         isAudioStreamPulsing = true
                     }
@@ -260,6 +329,7 @@ fun MainScreen(
         }
         val filter = IntentFilter().apply {
             addAction("com.xorcall.THREAT_ALERT")
+            addAction("com.xorcall.TRANSCRIPT_UPDATE")
             addAction("com.xorcall.AUDIO_STREAM_ACTIVE")
             addAction("com.xorcall.ACCESSIBILITY_STATE_CHANGED")
             addAction("com.xorcall.AI_VOICE_ALERT")
@@ -401,21 +471,16 @@ fun MainScreen(
                     activeVector = activeVector,
                     liveTranscript = liveTranscript,
                     aiVoiceStatus = lastAiVoiceStatus,
-                    onVoiceTestClick = {
-                        sttManager.startSingleRoleplaySession(
-                            onResult = { text ->
-                                if (text.isNotBlank()) {
-                                    triggerThreatExecution(text, "Actor Roleplay Mic")
-                                }
-                            },
-                            onError = { err ->
-                                Toast.makeText(context, "Microphone busy: Opening quick injector dialog", Toast.LENGTH_SHORT).show()
-                                showCustomInjectorDialog = true
-                            }
-                        )
-                    },
+                    isLiveTranscribing = isShieldActive,
                     onOpenCustomInjector = {
                         showCustomInjectorDialog = true
+                    },
+                    onTriggerKidnap5Lakhs = {
+                        triggerThreatExecution(
+                            "We have kidnapped your son. Pay 5 lakhs immediately or we will kill him.",
+                            "+91 99999 12345",
+                            DemographicVector.ALL
+                        )
                     },
                     onTriggerUniversalExtortion = {
                         triggerThreatExecution(
@@ -534,7 +599,7 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = { showCustomInjectorDialog = false },
             title = {
-                Text("🎙️ Custom Roleplay Call Injector", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+                Text("🎙️ Custom Roleplay Threat Injector", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
             },
             text = {
                 Column {
@@ -548,7 +613,7 @@ fun MainScreen(
                         value = customInputText,
                         onValueChange = { customInputText = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("e.g. 5 million dollar extraction, or telegram task recharge", fontSize = 11.sp, color = Color(0xFF64748B)) },
+                        placeholder = { Text("e.g. We have your son, give 5 lakhs or we kill him", fontSize = 11.sp, color = Color(0xFF64748B)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
@@ -562,7 +627,7 @@ fun MainScreen(
                 Button(
                     onClick = {
                         if (customInputText.isNotBlank()) {
-                            triggerThreatExecution(customInputText, "Actor Roleplay Injector")
+                            triggerThreatExecution(customInputText, "Custom Roleplay Injector")
                         }
                         showCustomInjectorDialog = false
                     },
@@ -759,8 +824,9 @@ fun DemographicThreatTesterCard(
     activeVector: DemographicVector,
     liveTranscript: String,
     aiVoiceStatus: String?,
-    onVoiceTestClick: () -> Unit,
+    isLiveTranscribing: Boolean,
     onOpenCustomInjector: () -> Unit,
+    onTriggerKidnap5Lakhs: () -> Unit,
     onTriggerUniversalExtortion: () -> Unit,
     onTriggerStudentScam: () -> Unit,
     onTriggerSeniorScam: () -> Unit,
@@ -782,13 +848,22 @@ fun DemographicThreatTesterCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "DIRECT CALL INTERCEPT CONSOLE & ROLEPLAY",
-                color = Color(0xFF38BDF8),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (isLiveTranscribing) Color(0xFFEF4444) else Color(0xFF64748B))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isLiveTranscribing) "LIVE TRANSCRIBING ACTIVE" else "STANDBY (SHIELD OFF)",
+                    color = if (isLiveTranscribing) Color(0xFFF87171) else Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+            }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))
@@ -801,13 +876,13 @@ fun DemographicThreatTesterCard(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Transcript Box
+        // Live Transcript Box
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color(0xFF030712))
-                .border(1.dp, Color(0xFF1F2937), RoundedCornerShape(8.dp))
+                .border(1.dp, if (isLiveTranscribing) Color(0xFF2563EB) else Color(0xFF1F2937), RoundedCornerShape(8.dp))
                 .padding(10.dp)
         ) {
             Column {
@@ -832,44 +907,50 @@ fun DemographicThreatTesterCard(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Live Voice Mic Test & Custom Injector Row
-        Row(
+        // Custom Text Injector Button
+        Button(
+            onClick = onOpenCustomInjector,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+            shape = RoundedCornerShape(8.dp)
         ) {
-            Button(
-                onClick = onVoiceTestClick,
-                modifier = Modifier.weight(1.3f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("🎙️ Speak Live Voice", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
-            }
-            OutlinedButton(
-                onClick = onOpenCustomInjector,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("✏️ Inject Text", fontSize = 11.sp, color = Color(0xFF38BDF8))
-            }
+            Text("✏️ Test Any Custom Threat Phrase (Injector)", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
         }
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Row 1: Universal 5M Extortion + Student
+        // Row 1: Kidnap 5L & Son + 5M Extortion
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Button(
+                onClick = onTriggerKidnap5Lakhs,
+                modifier = Modifier.weight(1.3f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+            ) {
+                Text("🔴 Kidnap: 5L & Son", fontSize = 9.sp, color = Color.White, fontWeight = FontWeight.Black)
+            }
+            Button(
                 onClick = onTriggerUniversalExtortion,
-                modifier = Modifier.weight(1.2f),
+                modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF991B1B)),
                 shape = RoundedCornerShape(6.dp),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
             ) {
                 Text("💰 5M $ Extort", fontSize = 9.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
             }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Row 2: Student + Senior CBI + Pro FedEx
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Button(
                 onClick = onTriggerStudentScam,
                 modifier = Modifier.weight(1f),
@@ -879,15 +960,6 @@ fun DemographicThreatTesterCard(
             ) {
                 Text("👨‍🎓 Student Task", fontSize = 9.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
             }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Row 2: Senior CBI + Pro FedEx
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
             Button(
                 onClick = onTriggerSeniorScam,
                 modifier = Modifier.weight(1f),
@@ -972,7 +1044,7 @@ fun CallHistoryVaultCard(
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = "${records.size} Monitored Calls with SHA-256 Hashes",
+                    text = "${records.size} Monitored Events with SHA-256 Hashes",
                     color = Color(0xFF64748B),
                     fontSize = 9.sp
                 )
@@ -1107,7 +1179,7 @@ fun HeaderSection() {
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Text(
-                text = "v1.0.5-PROD",
+                text = "v1.0.6-PROD",
                 color = Color(0xFF94A3B8),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace
@@ -1243,7 +1315,7 @@ fun ShieldStatusOrb(
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = if (isActive) 
-                (if (isAudioPulsing) "🟢 Direct Duplex Line Ingestion Active" else "Armed: Direct call audio output interceptor active")
+                "🟢 Armed & Actively Listening (Transcribing live words)" 
             else 
                 "Tap to arm real-time defense",
             color = Color(0xFF64748B),
