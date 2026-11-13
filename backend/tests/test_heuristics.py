@@ -109,3 +109,70 @@ def test_routine_workplace_mitigator():
     assert r["risk_score"] <= 0.20
     assert r["level"] == "SAFE"
     assert r["threat_type"] == "BENIGN_WORK_OR_CAMPUS"
+
+def test_empty_and_null_utterances_safe():
+    session = CallHeuristicSession("test_null_01")
+    r1 = session.feed(None)
+    assert r1["level"] == "SAFE"
+    assert r1["utterance"] == ""
+    
+    r2 = session.feed("   ")
+    assert r2["level"] == "SAFE"
+    assert r2["utterance"] == ""
+
+def test_hinglish_kinship_upi_demand():
+    session = CallHeuristicSession("test_hinglish_01")
+    r1 = session.feed("Papa mera accident ho gaya police ne pakad liya")
+    assert "kinship_emergency" in r1["flags"]
+    
+    r2 = session.feed("Jaldi se is UPI ID pe 50000 bhejo")
+    assert "payment_demand" in r2["flags"]
+    assert r2["level"] == "CRITICAL"
+    assert r2["threat_type"] == "KINSHIP_DEEPFAKE_EXTORTION"
+    assert r2["demographic_target"] == "PARENT"
+    assert r2["kill_chain_stage"] >= 4
+
+def test_flexible_student_job_task_scam():
+    session = CallHeuristicSession("test_job_flexible_01")
+    r1 = session.feed("Work from home job, earn 1500 per day by liking videos on telegram group")
+    assert "task_job_scam" in r1["flags"]
+    assert r1["demographic_target"] == "STUDENT_YOUTH"
+    
+    r2 = session.feed("Complete the prepaid rating task to unlock your earnings and deposit 10000 rupees")
+    assert "payment_demand" in r2["flags"]
+    assert r2["level"] == "CRITICAL"
+    assert r2["threat_type"] == "STUDENT_TASK_SCAM"
+    assert r2["kill_chain_stage"] >= 4
+
+def test_flexible_college_fee_admission_phishing():
+    session = CallHeuristicSession("test_admission_01")
+    r1 = session.feed("Hello student, this is admission clearance. Your college seat is cancelled unless you pay fee")
+    assert "college_fee_phishing" in r1["flags"]
+    
+    r2 = session.feed("Transfer hostel fee to 9876543210@upi immediately")
+    assert "payment_demand" in r2["flags"]
+    assert r2["level"] == "CRITICAL"
+    assert r2["threat_type"] == "COLLEGE_FEE_PHISHING"
+    assert r2["demographic_target"] == "STUDENT_YOUTH"
+
+def test_corporate_vp_whaling_flexible():
+    session = CallHeuristicSession("test_whaling_02")
+    r1 = session.feed("Hi this is VP finance, in a client meeting right now. Do not call my phone.")
+    assert "corporate_wire_scam" in r1["flags"]
+    assert r1["demographic_target"] == "WORKING_PROFESSIONAL"
+    
+    r2 = session.feed("Please initiate urgent vendor payment of 5 lakh rupees immediately.")
+    assert "payment_demand" in r2["flags"]
+    assert r2["level"] == "CRITICAL"
+    assert r2["threat_type"] == "CEO_IMPERSONATION_FRAUD"
+
+def test_authority_payment_without_isolation():
+    session = CallHeuristicSession("test_auth_pay_01")
+    session.feed("Inspector from Delhi Police Cyber Cell. An arrest warrant is issued for illegal transactions.")
+    r2 = session.feed("Transfer 3 lakh rupees to safe RBI account right now.")
+    assert "authority_claim" in r2["flags"]
+    assert "payment_demand" in r2["flags"]
+    assert r2["level"] == "CRITICAL"
+    assert r2["risk_score"] >= 0.90
+    assert r2["threat_type"] == "DIGITAL_ARREST_SCAM"
+    assert r2["kill_chain_stage"] >= 4

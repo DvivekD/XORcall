@@ -230,6 +230,11 @@ export default function CallSimulator() {
         if (interventionConfig.silentFamilyPing && safePingStatus === "IDLE") {
           handleTriggerSafePing();
         }
+        if (interventionConfig.haptics && typeof navigator !== "undefined" && "vibrate" in navigator) {
+          try {
+            navigator.vibrate([250, 100, 250, 100, 400]);
+          } catch {}
+        }
       }
 
       // Simulate deepfake vision check on video call lines
@@ -253,17 +258,40 @@ export default function CallSimulator() {
     const demographic = currentScenarioObj ? currentScenarioObj.demographic : "GENERAL";
 
     let threat_type = "DIGITAL_ARREST_SCAM";
-    if (activeScenario === "family_deepfake") threat_type = "KINSHIP_DEEPFAKE_EXTORTION";
-    else if (activeScenario === "student_task_scam") threat_type = "STUDENT_TASK_SCAM";
-    else if (activeScenario === "ceo_whaling") threat_type = "CEO_IMPERSONATION_FRAUD";
-    else if (activeScenario === "college_fee_phishing") threat_type = "COLLEGE_FEE_PHISHING";
-    else if (activeScenario === "real_hospital") {
+    let flags: string[] = ["authority_claim", "legal_threat", "isolation", "payment_demand"];
+    let stagesTriggered: string[] = ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_3_ISOLATION_CONFINEMENT", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
+    let explanation = `Multi-stage intent conjunction active [${demographic}]. Non-linear kill-chain triggered.`;
+
+    if (activeScenario === "real_hospital") {
       threat_type = "GENUINE_MEDICAL_TRIAGE";
       newScore = 0.05;
       level = "SAFE";
+      flags = ["physical_hospital_presence"];
+      stagesTriggered = [];
+      explanation = "Legitimate medical triage. In-person hospital attendance requested with zero direct payment demands. Risk mitigated.";
+    } else if (activeScenario === "student_task_scam") {
+      threat_type = "STUDENT_TASK_SCAM";
+      flags = ["task_job_scam", "payment_demand", "urgency"];
+      stagesTriggered = ["STAGE_1_PRETEXT_HOOK", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
+      explanation = "Multi-Stage Intent Kill-Chain Conjunction Triggered [STUDENT_YOUTH]: Telegram Part-Time Task Hook + Prepaid Crypto Recharge Siphon.";
+    } else if (activeScenario === "college_fee_phishing") {
+      threat_type = "COLLEGE_FEE_PHISHING";
+      flags = ["college_fee_phishing", "payment_demand", "urgency"];
+      stagesTriggered = ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
+      explanation = "Multi-Stage Intent Kill-Chain Conjunction Triggered [STUDENT_YOUTH]: BITS Pilani Fee Portal Phishing + Seat Cancellation Pretext + Direct Registrar UPI Demand.";
+    } else if (activeScenario === "ceo_whaling") {
+      threat_type = "CEO_IMPERSONATION_FRAUD";
+      flags = ["corporate_wire_scam", "payment_demand", "urgency"];
+      stagesTriggered = ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
+      explanation = "Multi-Stage Intent Kill-Chain Conjunction Triggered [WORKING_PROFESSIONAL]: Executive Whaling + Board Meeting Silence Pretext + Urgent Vendor Wire.";
+    } else if (activeScenario === "family_deepfake") {
+      threat_type = "KINSHIP_DEEPFAKE_EXTORTION";
+      flags = ["kinship_emergency", "payment_demand", "urgency"];
+      stagesTriggered = ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_4_PAYMENT_EXTORTION", "STAGE_5_TERMINAL_COERCION"];
+      explanation = "Multi-Stage Intent Kill-Chain Conjunction Triggered [PARENT]: Kinship AI Voice Clone + Police Custody Threat + Urgent Clinic UPI Bail Demand.";
     }
 
-    const calculatedStage = Math.min(5, (telemetry.kill_chain_stage || 1) + 1);
+    const calculatedStage = activeScenario === "real_hospital" ? 1 : (level === "CRITICAL" ? 5 : Math.min(4, (telemetry.kill_chain_stage || 1) + 1));
 
     const fallbackResult: TelemetryResult = {
       session_id: "SIM-LOCAL",
@@ -273,16 +301,26 @@ export default function CallSimulator() {
       demographic_target: demographic,
       stage: calculatedStage,
       kill_chain_stage: calculatedStage,
-      kill_chain_stages_triggered: ["STAGE_1_PRETEXT_HOOK", "STAGE_2_CRISIS_MANUFACTURE", "STAGE_3_ISOLATION_CONFINEMENT", "STAGE_4_PAYMENT_EXTORTION"],
-      conjunction_explanation: `Multi-stage intent conjunction active [${demographic}]. Non-linear kill-chain triggered.`,
-      flags: ["authority_claim", "isolation", "payment_demand"]
+      kill_chain_stages_triggered: stagesTriggered,
+      conjunction_explanation: explanation,
+      flags: flags
     };
 
     setTelemetry(fallbackResult);
     setTranscript((prev) => [...prev, { text: utterance, role: "caller" }]);
 
-    if ((level === "CRITICAL" || level === "WARN") && interventionConfig.audioWhisper) {
-      triggerAudioWhisper("XORcall Warning: Suspected extortion call. Hang up immediately.");
+    if (level === "CRITICAL" || level === "WARN") {
+      if (interventionConfig.audioWhisper) {
+        triggerAudioWhisper("XORcall Warning: Suspected extortion call. Hang up immediately.");
+      }
+      if (interventionConfig.silentFamilyPing && safePingStatus === "IDLE") {
+        handleTriggerSafePing();
+      }
+      if (interventionConfig.haptics && typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try {
+          navigator.vibrate([250, 100, 250, 100, 400]);
+        } catch {}
+      }
     }
   };
 
@@ -521,6 +559,27 @@ export default function CallSimulator() {
                 {interventionConfig.silentFamilyPing ? "ENABLED" : "DISABLED"}
               </button>
             </div>
+
+            {/* Heads-Up Banner Toggle */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-rose-400" />
+                <div>
+                  <div className="font-semibold text-slate-200 text-xs">Heads-Up Screen Warning Banner</div>
+                  <div className="text-[10px] text-slate-400">High-visibility floating overlay &amp; banking freeze</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setInterventionConfig((p) => ({ ...p, headsUpBanner: !p.headsUpBanner }))}
+                className={`text-[10px] font-mono px-2.5 py-1 rounded cursor-pointer font-bold transition-all ${
+                  interventionConfig.headsUpBanner
+                    ? "bg-rose-500 text-white"
+                    : "bg-slate-800 text-slate-400 hover:text-white"
+                }`}
+              >
+                {interventionConfig.headsUpBanner ? "ENABLED" : "DISABLED"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -678,8 +737,8 @@ export default function CallSimulator() {
           </div>
 
           {/* Live Action Banner */}
-          {telemetry.level === "CRITICAL" && (
-            <div className="p-3 bg-red-900/50 border border-red-500/80 rounded-xl flex items-center justify-between mt-3">
+          {telemetry.level === "CRITICAL" && interventionConfig.headsUpBanner && (
+            <div className="p-3 bg-red-900/50 border border-red-500/80 rounded-xl flex items-center justify-between mt-3 animate-in fade-in duration-300">
               <div className="flex items-center gap-2.5">
                 <AlertTriangle className="w-5 h-5 text-red-300 animate-bounce" />
                 <span className="text-xs font-bold text-white">

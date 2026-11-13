@@ -130,17 +130,34 @@ def download_dossier(session_id: str):
         "bank_accounts": ["309488102941 (State Bank of India)"]
     }
     
+    threat_type = "DIGITAL_ARREST_SCAM"
+    demographic = "SENIOR_CITIZEN"
+    risk_score = 0.94
+    transcript_lines = [
+        "00:15 - 'I am Inspector Rao from Mumbai Crime Branch. Your Aadhaar is tied to money laundering.'",
+        "00:48 - 'Stay on the video call, do not disconnect, do not tell your family. It is confidential.'",
+        "02:10 - 'Transfer 4 lakh rupees by RTGS to the safe RBI verification account immediately.'"
+    ]
+
+    active_sess = semantic_engine.sessions.get(session_id)
+    if active_sess and active_sess.log:
+        last_entry = active_sess.log[-1]
+        threat_type = last_entry.get("threat_type", threat_type)
+        demographic = last_entry.get("demographic_target", demographic)
+        risk_score = last_entry.get("risk_score", risk_score)
+        transcript_lines = [
+            f"00:{idx*15+10:02d} - '{entry.get('utterance')}'"
+            for idx, entry in enumerate(active_sess.log[-5:])
+        ]
+
     incident_data = {
         "session_id": session_id,
-        "threat_type": "DIGITAL_ARREST_SCAM",
-        "risk_score": 0.94,
+        "threat_type": threat_type,
+        "demographic_target": demographic,
+        "risk_score": risk_score,
         "caller_phone": "+91-98450-71289",
         "harvested_iocs": harvested,
-        "transcript_lines": [
-            "00:15 - 'I am Inspector Rao from Mumbai Crime Branch. Your Aadhaar is tied to money laundering.'",
-            "00:48 - 'Stay on the video call, do not disconnect, do not tell your family. It is confidential.'",
-            "02:10 - 'Transfer 4 lakh rupees by RTGS to the safe RBI verification account immediately.'"
-        ]
+        "transcript_lines": transcript_lines
     }
     pdf_bytes = dossier_generator.generate_pdf_bytes(incident_data)
     return Response(

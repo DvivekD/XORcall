@@ -108,8 +108,9 @@ export default function Home() {
       <section 
         className="border-b border-slate-900 bg-gradient-to-b from-slate-950 to-[#070b14] py-3 px-4"
         data-string="parallax"
-        data-string-factor="0.1"
-        {...({ string: "parallax", "string-factor": "0.1" } as any)}
+        data-string-parallax="0.15"
+        data-string-parallax-bias="0"
+        {...({ string: "parallax", "string-parallax": "0.15", "string-parallax-bias": "0" } as any)}
       >
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">

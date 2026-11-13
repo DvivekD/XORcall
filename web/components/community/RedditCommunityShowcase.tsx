@@ -12,6 +12,59 @@ export default function RedditCommunityShowcase() {
   const [hasUpvoted, setHasUpvoted] = useState<boolean>(false);
   const [activeCommentFilter, setActiveCommentFilter] = useState<"top" | "victims" | "tech" | "stakeholders">("top");
 
+  const [comments, setComments] = useState([
+    {
+      id: 1,
+      author: "u/Karan_FintechArch",
+      badge: "Principal Staff Engineer · Verified FinTech",
+      time: "16 hours ago",
+      upvotes: 1142,
+      upvoted: false,
+      category: "tech",
+      text: "As someone who builds transaction fraud models at a major Indian payment gateway, I can tell you why SMS warnings and popups fail 100% of the time: **The Amygdala Hijack**. When a 65yo retiree is told 'CBI arrest warrant for narcotics,' adrenaline spikes and cognitive bandwidth drops to tunnel vision. The phone is pressed against their cheek; the screen is off.\n\nXORcall's **multi-stage intent conjunction + out-of-band family verification** is the first architecture I've seen that actually solves this engineering reality. It doesn't rely on the panicked victim doing rational math."
+    },
+    {
+      id: 2,
+      author: "u/Shreya_UXDesign",
+      badge: "Lead Product Designer · Bangalore",
+      time: "14 hours ago",
+      upvotes: 894,
+      upvoted: false,
+      category: "stakeholders",
+      text: "Addressing the common feedback on haptics: **'What if the user dislikes vibration?'**\n\nThe brilliant design decision in XORcall is making intervention modalities **fully user-configurable**:\n1. Taptic Cheek Haptics (for elders who never look at screen)\n2. In-Ear Audio Whisper (discreet voice inject into earbuds/earpiece)\n3. Silent Out-of-Band Family Ping (zero on-device disturbance, guardian handles it)\n4. Heads-Up Banner + Instant Banking Lock\n\nMy mother despises sudden phone vibrations, but having it silently ping my phone with reverse telemetry would have saved our family ₹14 Lakhs last December."
+    },
+    {
+      id: 3,
+      author: "u/Bitsian_Dev2025",
+      badge: "Student · BITS Pilani 4th Year",
+      time: "12 hours ago",
+      upvotes: 628,
+      upvoted: false,
+      category: "victims",
+      text: "Glad the creators broadened this beyond just seniors! College students are getting butchered right now. In our campus alone, three juniors lost their semester fees to fake Telegram 'rating & review' tasks and crypto lockup scams. And the recent ₹7.67 Cr BITS Pilani fake admission syndicate proved that students in panic fall for authority pretexts just as easily. Having XORcall detect Telegram task deposits and fake fee portals is huge."
+    },
+    {
+      id: 4,
+      author: "u/Advocate_RamanCyber",
+      badge: "Cyber Legal Counsel · Ex-I4C Volunteer",
+      time: "9 hours ago",
+      upvotes: 492,
+      upvoted: false,
+      category: "stakeholders",
+      text: "The integration with the **1930 / I4C CFCFRMS Golden Hour pipeline** is the actual regulatory killer feature. In India, if a cyber fraud is reported within the first 2 hours, bank nodes can freeze the mule account before cashout. XORcall generating a BSA-compliant, tamper-evident PDF dossier with harvested mule UPIs and timestamps makes law enforcement triage instant instead of waiting 4 days for an FIR."
+    },
+    {
+      id: 5,
+      author: "u/Rohan_BITS_Hyd",
+      badge: "Alum · BITS Hyderabad 2023",
+      time: "7 hours ago",
+      upvotes: 419,
+      upvoted: false,
+      category: "victims",
+      text: "The ₹7.67 Cr BITS Pilani scam hit close to home. The scammers impersonate admissions deans and create identical fee portals with fake clearance certificates. Freshers and parents under panic transfer lakhs to burner UPI IDs thinking their seat will be cancelled in 30 minutes. Having XORcall classify campus fee phishing and alert guardians in real-time is an absolute lifesaver."
+    }
+  ]);
+
   const handleUpvote = () => {
     if (!hasUpvoted) {
       setUpvotes((v) => v + 1);
@@ -22,46 +75,23 @@ export default function RedditCommunityShowcase() {
     }
   };
 
-  const COMMENTS = [
-    {
-      id: 1,
-      author: "u/Karan_FintechArch",
-      badge: "Principal Staff Engineer · Verified FinTech",
-      time: "16 hours ago",
-      upvotes: 1142,
-      category: "tech",
-      text: "As someone who builds transaction fraud models at a major Indian payment gateway, I can tell you why SMS warnings and popups fail 100% of the time: **The Amygdala Hijack**. When a 65yo retiree is told 'CBI arrest warrant for narcotics,' adrenaline spikes and cognitive bandwidth drops to tunnel vision. The phone is pressed against their cheek; the screen is off.\n\nXORcall's **multi-stage intent conjunction + out-of-band family verification** is the first architecture I've seen that actually solves this engineering reality. It doesn't rely on the panicked victim doing rational math."
-    },
-    {
-      id: 2,
-      author: "u/Shreya_UXDesign",
-      badge: "Lead Product Designer · Bangalore",
-      time: "14 hours ago",
-      upvotes: 894,
-      category: "stakeholders",
-      text: "Addressing the common feedback on haptics: **'What if the user dislikes vibration?'**\n\nThe brilliant design decision in XORcall is making intervention modalities **fully user-configurable**:\n1. Taptic Cheek Haptics (for elders who never look at screen)\n2. In-Ear Audio Whisper (discreet voice inject into earbuds/earpiece)\n3. Silent Out-of-Band Family Ping (zero on-device disturbance, guardian handles it)\n4. Heads-Up Banner + Instant Banking Lock\n\nMy mother despises sudden phone vibrations, but having it silently ping my phone with reverse telemetry would have saved our family ₹14 Lakhs last December."
-    },
-    {
-      id: 3,
-      author: "u/Bitsian_Dev2025",
-      badge: "Student · BITS Pilani 4th Year",
-      time: "12 hours ago",
-      upvotes: 628,
-      category: "victims",
-      text: "Glad the creators broadened this beyond just seniors! College students are getting butchered right now. In our campus alone, three juniors lost their semester fees to fake Telegram 'rating & review' tasks and crypto lockup scams. And the recent ₹7.67 Cr BITS Pilani fake admission syndicate proved that students in panic fall for authority pretexts just as easily. Having XORcall detect Telegram task deposits and fake fee portals is huge."
-    },
-    {
-      id: 4,
-      author: "u/Advocate_RamanCyber",
-      badge: "Cyber Legal Counsel · Ex-I4C Volunteer",
-      time: "9 hours ago",
-      upvotes: 492,
-      category: "stakeholders",
-      text: "The integration with the **1930 / I4C CFCFRMS Golden Hour pipeline** is the actual regulatory killer feature. In India, if a cyber fraud is reported within the first 2 hours, bank nodes can freeze the mule account before cashout. XORcall generating a BSA-compliant, tamper-evident PDF dossier with harvested mule UPIs and timestamps makes law enforcement triage instant instead of waiting 4 days for an FIR."
-    }
-  ];
+  const handleCommentUpvote = (id: number) => {
+    setComments((prev) =>
+      prev.map((c) => {
+        if (c.id === id) {
+          const newUpvoted = !c.upvoted;
+          return {
+            ...c,
+            upvoted: newUpvoted,
+            upvotes: newUpvoted ? c.upvotes + 1 : c.upvotes - 1
+          };
+        }
+        return c;
+      })
+    );
+  };
 
-  const filteredComments = COMMENTS.filter((c) => {
+  const filteredComments = comments.filter((c) => {
     if (activeCommentFilter === "top") return true;
     return c.category === activeCommentFilter;
   });
@@ -269,10 +299,15 @@ export default function RedditCommunityShowcase() {
                   </span>
                   <span className="text-slate-500">• {comment.time}</span>
                 </div>
-                <div className="flex items-center gap-1 font-mono text-orange-400 font-bold text-[11px]">
+                <button
+                  onClick={() => handleCommentUpvote(comment.id)}
+                  className={`flex items-center gap-1 font-mono text-[11px] font-bold px-2 py-0.5 rounded cursor-pointer transition-all ${
+                    comment.upvoted ? "bg-orange-950 text-orange-400 border border-orange-500/40" : "text-slate-400 hover:text-orange-400 hover:bg-slate-800"
+                  }`}
+                >
                   <ArrowBigUp className="w-3.5 h-3.5" />
                   {comment.upvotes}
-                </div>
+                </button>
               </div>
 
               <div className="text-slate-300 leading-relaxed space-y-2 whitespace-pre-line text-[11px]">

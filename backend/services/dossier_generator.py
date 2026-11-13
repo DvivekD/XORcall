@@ -74,13 +74,23 @@ class DossierGenerator:
         threat_type = incident_data.get("threat_type", "DIGITAL_ARREST_SCAM")
         risk_score = incident_data.get("risk_score", 0.94)
 
+        demographic_raw = incident_data.get("demographic_target", "SENIOR_CITIZEN")
+        demographic_map = {
+            "SENIOR_CITIZEN": "Senior Citizen (Retiree / Elder Profile)",
+            "STUDENT_YOUTH": "Student / Youth (Campus & Part-Time Job Scam Target)",
+            "WORKING_PROFESSIONAL": "Working Professional (Corporate Executive / Whaling Target)",
+            "PARENT": "Parent / Guardian (Kinship Deepfake Extortion Target)",
+            "GENERAL": "Citizen (Protected Profile)"
+        }
+        demographic_label = demographic_map.get(demographic_raw, "Protected Profile")
+
         meta_data = [
             [Paragraph("<b>Incident Ref ID:</b>", body_style), Paragraph(str(incident_id), body_style),
              Paragraph("<b>Generated At:</b>", body_style), Paragraph(created_at, body_style)],
             [Paragraph("<b>Primary Threat:</b>", body_style), Paragraph(threat_type, body_style),
              Paragraph("<b>Composite Risk Score:</b>", body_style), Paragraph(f"<b>{risk_score}/1.00 (CRITICAL)</b>", body_style)],
             [Paragraph("<b>Caller Identity:</b>", body_style), Paragraph(incident_data.get("caller_phone", "+91-98450-XXXXX (Burner VoIP)"), body_style),
-             Paragraph("<b>Target Victim:</b>", body_style), Paragraph("Senior Citizen (Protected Profile)", body_style)]
+             Paragraph("<b>Target Victim:</b>", body_style), Paragraph(demographic_label, body_style)]
         ]
 
         t_meta = Table(meta_data, colWidths=[110, 160, 110, 160])

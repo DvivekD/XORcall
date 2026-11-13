@@ -28,6 +28,12 @@ class TapticHapticEngine(private val context: Context) : SensorEventListener {
     private var isNearEar: Boolean = false
     private var currentLevel: RiskLevel = RiskLevel.SAFE
 
+    // Modular Intervention Configuration (Addresses user/judge dislike of vibration)
+    var isHapticsEnabled: Boolean = false
+    var isAudioWhisperEnabled: Boolean = true
+    var isSilentFamilyPingEnabled: Boolean = true
+    var isHeadsUpBannerEnabled: Boolean = true
+
     private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
         vibratorManager.defaultVibrator
@@ -68,6 +74,10 @@ class TapticHapticEngine(private val context: Context) : SensorEventListener {
     }
 
     private fun applyVibrationPattern(level: RiskLevel) {
+        if (!isHapticsEnabled) {
+            vibrator.cancel()
+            return
+        }
         if (!vibrator.hasVibrator()) return
 
         when (level) {
