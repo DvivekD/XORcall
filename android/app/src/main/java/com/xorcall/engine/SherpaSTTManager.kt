@@ -17,11 +17,11 @@ data class ThreatAnalysis(
 
 /**
  * SherpaSTTManager
- * On-Device Speech Transcription & Threat Interception Engine:
- * - Powered by VoskSTTEngine (100% on-device, offline, works DURING phone calls on Android 14)
- * - Streams live partial and final words directly into UI & background alert system
- * - Instantly evaluates spoken words against Kidnap, Death Threats, Extortion & Demographic Lexicons
- * - Analyzes raw PCM audio for AI synthetic voice clone signatures via AcousticSyntheticDetector
+ * Coordinates On-Device Speech Transcription & Multi-Demographic Threat Interception:
+ * - Powered by VoskSTTEngine (100% offline bundled model, works during live calls)
+ * - Streams live spoken words directly into UI transcript box in real-time
+ * - Evaluates words against Extortion, Kidnap, Death Threats, and Demographic Vectors
+ * - Analyzes raw PCM audio for AI synthetic voice clone signatures
  */
 class SherpaSTTManager(
     private val assetManager: AssetManager,
@@ -31,56 +31,43 @@ class SherpaSTTManager(
     private val syntheticDetector = AcousticSyntheticDetector()
     private var latestAcousticResult: AcousticAnalysisResult? = null
 
-    var voskEngine: VoskSTTEngine? = null
-        private set
+    private var voskEngine: VoskSTTEngine? = null
 
     val isVoskReady: Boolean get() = voskEngine?.isReady == true
-    val isDownloading: Boolean get() = voskEngine?.isDownloading == true
-    val downloadProgress: Float get() = voskEngine?.downloadProgress ?: 0f
+    val isUnpacking: Boolean get() = voskEngine?.isUnpacking == true
 
     var activeScope: DemographicVector = DemographicVector.ALL
     var onThreatDetected: ((analysis: ThreatAnalysis, transcript: String) -> Unit)? = null
     var onAcousticResult: ((result: AcousticAnalysisResult) -> Unit)? = null
     var onLiveTranscriptUpdate: ((transcript: String, isEndpoint: Boolean) -> Unit)? = null
-    var onModelDownloadProgress: ((Float) -> Unit)? = null
     var onModelReady: (() -> Unit)? = null
 
-    fun initialize(modelPath: String = "vosk-model-small-en-us-0.15") {
+    fun initialize(modelPath: String = "model-en") {
         if (isInitialized) return
         val ctx = context ?: return
-        voskEngine = VoskSTTEngine(ctx).apply {
+        voskEngine = VoskSTTEngine.getInstance(ctx).apply {
             onTranscript = { text, isFinal ->
                 handleIncomingTranscript(text, isFinal)
-            }
-            onDownloadProgress = { progress ->
-                this@SherpaSTTManager.onModelDownloadProgress?.invoke(progress)
             }
             onModelReady = {
                 this@SherpaSTTManager.onModelReady?.invoke()
             }
         }
+        voskEngine?.initialize()
         isInitialized = true
     }
 
-    /**
-     * Initializes Vosk on-device model. If not yet downloaded, downloads it asynchronously.
-     */
     fun initializeVosk(scope: CoroutineScope) {
         if (voskEngine == null) {
             initialize()
         }
-        val engine = voskEngine ?: return
-        if (engine.isModelDownloaded()) {
-            engine.initialize()
-        } else {
-            engine.downloadModel(scope)
-        }
+        voskEngine?.initialize(scope)
     }
 
     private fun handleIncomingTranscript(text: String, isFinal: Boolean) {
         if (text.isBlank()) return
 
-        // 1. Notify UI
+        // 1. Notify UI listener
         onLiveTranscriptUpdate?.invoke(text, isFinal)
 
         // 2. Broadcast for UI receivers
@@ -101,8 +88,8 @@ class SherpaSTTManager(
     }
 
     /**
-     * Feed raw PCM 16-bit ShortArray from AudioRecord.
-     * Feeds directly to Vosk for STT and AcousticSyntheticDetector for AI voice clone detection.
+     * Feeds raw PCM 16-bit ShortArray from AudioRecord.
+     * Evaluated concurrently by Vosk STT and AcousticSyntheticDetector.
      */
     fun acceptAudioChunkRaw(pcmShorts: ShortArray, count: Int) {
         if (count <= 0) return
@@ -156,21 +143,15 @@ class SherpaSTTManager(
         }
     }
 
-    /**
-     * Starts live listening listener.
-     */
     fun startAlwaysOnLiveListening(onTranscript: (text: String, isEndpoint: Boolean) -> Unit) {
         this.onLiveTranscriptUpdate = onTranscript
         if (voskEngine == null) {
             initialize()
         }
-        if (voskEngine?.isModelDownloaded() == true && voskEngine?.isReady == false) {
-            voskEngine?.initialize()
-        }
     }
 
     fun stopAlwaysOnLiveListening() {
-        // Vosk operates continuously with audio feeds
+        // Continuous Vosk audio stream processing
     }
 
     /**
@@ -207,8 +188,6 @@ class SherpaSTTManager(
     }
 
     fun release() {
-        voskEngine?.release()
-        voskEngine = null
         syntheticDetector.reset()
         isInitialized = false
     }

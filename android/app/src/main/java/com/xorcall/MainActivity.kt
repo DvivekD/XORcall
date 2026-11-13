@@ -8,6 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -186,17 +189,13 @@ fun MainScreen(
 
     val coroutineScope = rememberCoroutineScope()
     var isVoskReady by remember { mutableStateOf(sttManager.isVoskReady) }
-    var isDownloadingModel by remember { mutableStateOf(sttManager.isDownloading) }
-    var modelDownloadProgress by remember { mutableStateOf(sttManager.downloadProgress) }
+    var isUnpacking by remember { mutableStateOf(sttManager.isUnpacking) }
+    var isMicTesting by remember { mutableStateOf(false) }
 
     DisposableEffect(sttManager) {
         sttManager.onModelReady = {
             isVoskReady = true
-            isDownloadingModel = false
-        }
-        sttManager.onModelDownloadProgress = { progress ->
-            isDownloadingModel = true
-            modelDownloadProgress = progress
+            isUnpacking = false
         }
         onDispose { }
     }
@@ -232,6 +231,48 @@ fun MainScreen(
             refreshHistory()
         } else {
             Toast.makeText(context, "🟢 Normal speech: No threat markers found.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun startDirectMicTest() {
+        val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (!hasMic) {
+            Toast.makeText(context, "Please grant microphone permission first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (isMicTesting) return
+        isMicTesting = true
+        liveTranscript = "🔴 RECORDING LIVE MIC: Speak extortion threat into mic now..."
+        coroutineScope.launch(Dispatchers.IO) {
+            val sampleRate = 16000
+            val channelConfig = AudioFormat.CHANNEL_IN_MONO
+            val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+            val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096)
+            var recorder: AudioRecord? = null
+            try {
+                recorder = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, minBuf)
+                if (recorder.state == AudioRecord.STATE_INITIALIZED) {
+                    recorder.startRecording()
+                    val pcmBuffer = ShortArray(minBuf / 2)
+                    val endAt = System.currentTimeMillis() + 6000L
+                    while (System.currentTimeMillis() < endAt && isMicTesting) {
+                        val read = recorder.read(pcmBuffer, 0, pcmBuffer.size)
+                        if (read > 0) {
+                            sttManager.acceptAudioChunkRaw(pcmBuffer, read)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                try {
+                    recorder?.stop()
+                    recorder?.release()
+                } catch (_: Exception) {}
+                withContext(Dispatchers.Main) {
+                    isMicTesting = false
+                }
+            }
         }
     }
 
@@ -392,13 +433,12 @@ fun MainScreen(
                 HeaderSection()
             }
 
-            // ON-DEVICE VOSK SPEECH ENGINE STATUS & DOWNLOAD CARD
+            // ON-DEVICE VOSK SPEECH ENGINE STATUS & UNPACKING CARD
             item {
                 ModelStatusCard(
                     isReady = isVoskReady,
-                    isDownloading = isDownloadingModel,
-                    progress = modelDownloadProgress,
-                    onDownloadClick = {
+                    isUnpacking = isUnpacking,
+                    onInitClick = {
                         sttManager.initializeVosk(coroutineScope)
                     }
                 )
@@ -480,6 +520,8 @@ fun MainScreen(
                     liveTranscript = liveTranscript,
                     aiVoiceStatus = lastAiVoiceStatus,
                     isLiveTranscribing = isShieldActive,
+                    isMicTesting = isMicTesting,
+                    onStartMicTest = { startDirectMicTest() },
                     onOpenCustomInjector = {
                         showCustomInjectorDialog = true
                     },
@@ -833,6 +875,8 @@ fun DemographicThreatTesterCard(
     liveTranscript: String,
     aiVoiceStatus: String?,
     isLiveTranscribing: Boolean,
+    isMicTesting: Boolean = false,
+    onStartMicTest: () -> Unit = {},
     onOpenCustomInjector: () -> Unit,
     onTriggerKidnap5Lakhs: () -> Unit,
     onTriggerUniversalExtortion: () -> Unit,
@@ -914,6 +958,25 @@ fun DemographicThreatTesterCard(
         }
 
         Spacer(modifier = Modifier.height(10.dp))
+
+        // Direct Live Mic Test Button
+        Button(
+            onClick = onStartMicTest,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isMicTesting) Color(0xFFDC2626) else Color(0xFF059669)
+            ),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text(
+                text = if (isMicTesting) "🔴 RECORDING MIC... (SPEAK THREAT NOW!)" else "🎙️ TEST LIVE MIC (6s SPEAK TEST)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                color = Color.White
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Custom Text Injector Button
         Button(
@@ -1187,7 +1250,7 @@ fun HeaderSection() {
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Text(
-                text = "v1.0.7-PROD",
+                text = "v1.0.8-PROD",
                 color = Color(0xFF94A3B8),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace
@@ -1434,9 +1497,8 @@ fun BottomSpeedDialBar(onDial1930: () -> Unit) {
 @Composable
 fun ModelStatusCard(
     isReady: Boolean,
-    isDownloading: Boolean,
-    progress: Float,
-    onDownloadClick: () -> Unit
+    isUnpacking: Boolean,
+    onInitClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -1453,29 +1515,22 @@ fun ModelStatusCard(
             Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(
-                    text = if (isReady) "ON-DEVICE SPEECH ENGINE (VOSK): READY" else "ON-DEVICE SPEECH ENGINE (OFFLINE)",
+                    text = if (isReady) "ON-DEVICE VOSK ENGINE: ARMED" else "ON-DEVICE VOSK ENGINE: INITIALIZING",
                     color = if (isReady) Color(0xFF6EE7B7) else Color(0xFFA5B4FC),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                if (isDownloading) {
+                if (isUnpacking) {
                     Text(
-                        text = "Downloading offline model (~40MB)... ${(progress * 100).toInt()}%",
+                        text = "Unpacking offline speech model from APK... (0.5s)",
                         color = Color.White,
                         fontSize = 9.sp
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                        color = Color(0xFF34D399),
-                        trackColor = Color(0xFF1F2937)
-                    )
                 } else if (isReady) {
                     Text(
-                        text = "100% On-device offline inference active. Works during phone calls.",
+                        text = "100% Offline Kaldi Model Bundled. In-Call Duplex Ready.",
                         color = Color.White,
                         fontSize = 9.sp
                     )
@@ -1488,15 +1543,15 @@ fun ModelStatusCard(
                 }
             }
         }
-        if (!isReady && !isDownloading) {
+        if (!isReady && !isUnpacking) {
             Spacer(modifier = Modifier.width(8.dp))
             Button(
-                onClick = onDownloadClick,
+                onClick = onInitClick,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
                 shape = RoundedCornerShape(6.dp),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Text("Get Model", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("Arm Engine", fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

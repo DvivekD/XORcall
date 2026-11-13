@@ -29,6 +29,17 @@ jobs:
         run: |
           yes | sdkmanager --licenses || true
 
+      - name: Download & Bundle Offline Vosk Model into APK Assets
+        run: |
+          mkdir -p android/app/src/main/assets/model-en
+          echo "Downloading Vosk model..."
+          curl -sSL https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip -o /tmp/vosk.zip
+          unzip -q /tmp/vosk.zip -d /tmp/vosk-extracted
+          cp -r /tmp/vosk-extracted/vosk-model-small-en-us-0.15/* android/app/src/main/assets/model-en/
+          rm -rf /tmp/vosk.zip /tmp/vosk-extracted
+          echo "Bundled model files:"
+          ls -la android/app/src/main/assets/model-en/
+
       - name: Build Android Debug APK
         run: |
           cd android
@@ -39,26 +50,26 @@ jobs:
       - name: Copy & Rename APK
         run: |
           mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.7-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.0.8-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.0.7-debug.apk
+          path: build-artifacts/XORcall-v1.0.8-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.7-apk
-          name: "XORcall v1.0.7 Android APK (Vosk On-Device STT — Offline In-Call Live Transcriber & Extortion Interceptor)"
+          tag_name: v1.0.8-apk
+          name: "XORcall v1.0.8 Android APK (Bundled Offline Vosk STT — Live In-Call Speech Transcriber & Extortion Interceptor)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.0.7
-            - **Vosk True On-Device STT Engine**: Replaced Google SpeechRecognizer IPC with a fully offline on-device Vosk engine. Works seamlessly DURING active telephony phone calls without being blocked by Android 14 / Vivo FuntouchOS audio policies.
-            - **Direct PCM Audio Line Ingestion**: Directly feeds raw 16kHz PCM from `AudioRecord(VOICE_COMMUNICATION)` into Vosk for live transcription without distortion.
-            - **Live Word Streaming**: Streams live partial & final transcribed words directly onto the UI transcript card and triggers alerts in real time.
-            - **Instant Sensory Interventions**: Immediately fires Cheek Haptics Shockwave, In-Ear Audio Whisper (TTS), Heads-Up Alert Banner, and Silent Guardian Ping on threat keywords (`kill`, `son`, `5 lakhs`, `kidnap`, etc.).
-            - **BSA Section 63 Digital Evidence Vault**: Logs all intercepted calls with SHA-256 cryptographic forensic hashes for instant 1930 / I4C cybercrime filing.
-          files: build-artifacts/XORcall-v1.0.7-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.0.8
+            - **100% Bundled Offline Vosk Speech Model**: The speech model is now compiled directly into the APK assets. Zero runtime downloads. Works immediately upon installation without requiring any internet connection.
+            - **Live On-Device Speech Transcription**: Transcribes spoken words continuously during active calls and in-app microphone tests without being blocked by Android 14 / Vivo audio privacy policies.
+            - **Direct In-Call Audio Stream Feed**: Raw 16-bit 16kHz PCM audio flows directly from `AudioRecord` into the native Vosk Kaldi recognizer.
+            - **Sensory Escalation Modalities**: Immediate Cheek Haptics Shockwave, In-Ear Audio Whisper (TTS), Heads-Up Alert Banner, and Silent Guardian Ping on threat keywords (`kill`, `son`, `5 lakhs`, `kidnap`, etc.).
+            - **Live In-App Mic Testing**: Added dedicated in-app live microphone test button to verify STT recognition on-device in 3 seconds.
+          files: build-artifacts/XORcall-v1.0.8-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

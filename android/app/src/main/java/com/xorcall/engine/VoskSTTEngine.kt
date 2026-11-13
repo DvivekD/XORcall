@@ -1,29 +1,34 @@
 package com.xorcall.engine
 
 import android.content.Context
+import android.content.res.AssetManager
 import android.util.Log
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.*
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.zip.ZipInputStream
 
 /**
- * VoskSTTEngine — True On-Device Speech-to-Text Engine
- * Runs entirely offline using the Vosk library + vosk-model-small-en-us-0.15.
- * Processes raw PCM 16-bit mono 16kHz audio byte buffers → text.
- * No Google dependency. No IPC. No cloud. Works DURING active phone calls.
+ * VoskSTTEngine — True On-Device Speech-to-Text Engine (Singleton)
+ * 100% offline speech recognition using the bundled Vosk model from APK assets.
+ * No internet required. Works DURING active phone calls on Android 14.
  */
-class VoskSTTEngine(private val context: Context) {
+class VoskSTTEngine private constructor(private val context: Context) {
 
     companion object {
         private const val TAG = "VoskSTT"
-        private const val MODEL_NAME = "vosk-model-small-en-us-0.15"
-        private const val MODEL_URL = "https://alphacephei.com/vosk/models/$MODEL_NAME.zip"
+        private const val ASSET_MODEL_NAME = "model-en"
         private const val SAMPLE_RATE = 16000f
+
+        @Volatile
+        private var instance: VoskSTTEngine? = null
+
+        fun getInstance(context: Context): VoskSTTEngine {
+            return instance ?: synchronized(this) {
+                instance ?: VoskSTTEngine(context.applicationContext).also { instance = it }
+            }
+        }
     }
 
     private var model: Model? = null
@@ -34,143 +39,98 @@ class VoskSTTEngine(private val context: Context) {
         private set
 
     @Volatile
-    var isDownloading: Boolean = false
-        private set
-
-    var downloadProgress: Float = 0f
+    var isUnpacking: Boolean = false
         private set
 
     var onTranscript: ((text: String, isFinal: Boolean) -> Unit)? = null
     var onModelReady: (() -> Unit)? = null
-    var onDownloadProgress: ((Float) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
-    private val modelDir: File
-        get() = File(context.filesDir, MODEL_NAME)
+    private val targetModelDir: File
+        get() = File(context.filesDir, ASSET_MODEL_NAME)
 
-    private fun resolveActualModelDir(): File? {
-        val direct = modelDir
-        if (!direct.exists()) return null
-        if (File(direct, "am").exists() || File(direct, "conf").exists()) return direct
-        // Check subdirectories in case zip had nested folder
-        direct.listFiles()?.forEach { sub ->
+    fun isModelExtracted(): Boolean {
+        val dir = targetModelDir
+        return dir.exists() && (File(dir, "am").exists() || File(dir, "conf").exists() || (dir.listFiles()?.isNotEmpty() == true))
+    }
+
+    /**
+     * Initializes Vosk model by unpacking from APK assets (if not already unpacked)
+     * and loading the native Model + Recognizer into memory.
+     */
+    fun initialize(scope: CoroutineScope? = null) {
+        if (isReady) return
+
+        val launchScope = scope ?: CoroutineScope(Dispatchers.IO + SupervisorJob())
+        launchScope.launch(Dispatchers.IO) {
+            try {
+                if (!isModelExtracted()) {
+                    isUnpacking = true
+                    Log.i(TAG, "Unpacking bundled offline Vosk model from assets...")
+                    unpackAssetFolder(context.assets, ASSET_MODEL_NAME, targetModelDir)
+                    isUnpacking = false
+                    Log.i(TAG, "Vosk model successfully unpacked to ${targetModelDir.absolutePath}")
+                }
+
+                // Locate actual model directory (handles nested folders if any)
+                val modelPath = findModelDir(targetModelDir)
+                if (modelPath != null) {
+                    model = Model(modelPath.absolutePath)
+                    recognizer = Recognizer(model, SAMPLE_RATE).apply {
+                        setPartialWords(true)
+                    }
+                    isReady = true
+                    Log.i(TAG, "Vosk STT engine initialized successfully at ${modelPath.absolutePath}")
+                    withContext(Dispatchers.Main) {
+                        onModelReady?.invoke()
+                    }
+                } else {
+                    Log.e(TAG, "Model directory not found after unpacking")
+                    onError?.invoke("Model files missing in assets")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize Vosk model", e)
+                isUnpacking = false
+                onError?.invoke("Speech engine init error: ${e.message}")
+            }
+        }
+    }
+
+    private fun findModelDir(baseDir: File): File? {
+        if (File(baseDir, "am").exists() || File(baseDir, "conf").exists()) return baseDir
+        baseDir.listFiles()?.forEach { sub ->
             if (sub.isDirectory && (File(sub, "am").exists() || File(sub, "conf").exists())) {
                 return sub
             }
         }
-        if (direct.isDirectory && (direct.listFiles()?.isNotEmpty() == true)) {
-            return direct
+        if (baseDir.exists() && baseDir.isDirectory && (baseDir.listFiles()?.isNotEmpty() == true)) {
+            return baseDir
         }
         return null
     }
 
-    fun isModelDownloaded(): Boolean {
-        return resolveActualModelDir() != null
-    }
-
-    /**
-     * Initialize Vosk model from local storage.
-     * Call downloadModel() first if not yet downloaded.
-     */
-    fun initialize(): Boolean {
-        if (isReady) return true
-
-        return try {
-            val actualDir = resolveActualModelDir()
-            if (actualDir == null) {
-                Log.w(TAG, "Model not downloaded or resolved yet")
-                return false
-            }
-
-            model = Model(actualDir.absolutePath)
-            recognizer = Recognizer(model, SAMPLE_RATE).apply {
-                setPartialWords(true)
-            }
-            isReady = true
-            Log.i(TAG, "Vosk STT engine initialized successfully at ${actualDir.absolutePath}")
-            onModelReady?.invoke()
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize Vosk model", e)
-            onError?.invoke("Failed to load speech model: ${e.message}")
-            false
-        }
-    }
-
-    /**
-     * Downloads the Vosk model zip from the official server, extracts it,
-     * and stores it in app-internal storage (~40MB download, ~67MB extracted).
-     */
-    fun downloadModel(scope: CoroutineScope) {
-        if (isDownloading || isModelDownloaded()) {
-            if (isModelDownloaded()) initialize()
-            return
-        }
-
-        isDownloading = true
-        downloadProgress = 0f
-
-        scope.launch(Dispatchers.IO) {
-            try {
-                Log.i(TAG, "Downloading Vosk model from $MODEL_URL")
-                val zipFile = File(context.cacheDir, "$MODEL_NAME.zip")
-
-                // Download with progress
-                val url = URL(MODEL_URL)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.connectTimeout = 30_000
-                connection.readTimeout = 60_000
-                connection.connect()
-
-                val totalBytes = connection.contentLength.toLong()
-                var downloadedBytes = 0L
-
-                connection.inputStream.buffered().use { input ->
-                    FileOutputStream(zipFile).use { output ->
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            output.write(buffer, 0, bytesRead)
-                            downloadedBytes += bytesRead
-                            downloadProgress = if (totalBytes > 0) {
-                                (downloadedBytes.toFloat() / totalBytes).coerceIn(0f, 0.9f)
-                            } else {
-                                0.5f
-                            }
-                            onDownloadProgress?.invoke(downloadProgress)
-                        }
-                    }
+    private fun unpackAssetFolder(assetManager: AssetManager, sourcePath: String, targetDir: File) {
+        val list = assetManager.list(sourcePath)
+        if (list.isNullOrEmpty()) {
+            // It's a file
+            targetDir.parentFile?.mkdirs()
+            assetManager.open(sourcePath).use { input ->
+                FileOutputStream(targetDir).use { output ->
+                    input.copyTo(output)
                 }
-
-                Log.i(TAG, "Download complete. Extracting...")
-                downloadProgress = 0.9f
-                onDownloadProgress?.invoke(0.9f)
-
-                // Extract zip
-                extractZip(zipFile, context.filesDir)
-                zipFile.delete()
-
-                downloadProgress = 1.0f
-                onDownloadProgress?.invoke(1.0f)
-                Log.i(TAG, "Model extracted successfully to ${modelDir.absolutePath}")
-
-                // Initialize the model
-                withContext(Dispatchers.Main) {
-                    initialize()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Model download failed", e)
-                onError?.invoke("Model download failed: ${e.message}")
-            } finally {
-                isDownloading = false
+            }
+        } else {
+            // It's a directory
+            targetDir.mkdirs()
+            for (file in list) {
+                val subSource = if (sourcePath.isEmpty()) file else "$sourcePath/$file"
+                unpackAssetFolder(assetManager, subSource, File(targetDir, file))
             }
         }
     }
 
     /**
-     * Feed raw PCM 16-bit mono 16kHz audio bytes to Vosk for recognition.
-     * This is called from the AudioRecord loop in CallMonitorService.
-     * Returns immediately — callbacks fire on transcript detection.
+     * Feeds raw PCM 16-bit mono 16kHz audio byte buffers into Vosk.
      */
     fun acceptWaveform(pcmBytes: ByteArray, length: Int) {
         if (!isReady || recognizer == null) return
@@ -197,8 +157,7 @@ class VoskSTTEngine(private val context: Context) {
     }
 
     /**
-     * Feed raw PCM 16-bit ShortArray (what AudioRecord.read() returns).
-     * Converts to byte array for Vosk.
+     * Feeds raw PCM 16-bit ShortArray from AudioRecord.
      */
     fun acceptWaveformShorts(pcmShorts: ShortArray, count: Int) {
         if (!isReady) return
@@ -225,29 +184,6 @@ class VoskSTTEngine(private val context: Context) {
             JSONObject(json).optString("partial", "")
         } catch (e: Exception) {
             ""
-        }
-    }
-
-    private fun extractZip(zipFile: File, destDir: File) {
-        ZipInputStream(BufferedInputStream(FileInputStream(zipFile))).use { zis ->
-            var entry = zis.nextEntry
-            while (entry != null) {
-                val outFile = File(destDir, entry.name)
-                if (entry.isDirectory) {
-                    outFile.mkdirs()
-                } else {
-                    outFile.parentFile?.mkdirs()
-                    FileOutputStream(outFile).use { fos ->
-                        val buffer = ByteArray(8192)
-                        var len: Int
-                        while (zis.read(buffer).also { len = it } > 0) {
-                            fos.write(buffer, 0, len)
-                        }
-                    }
-                }
-                zis.closeEntry()
-                entry = zis.nextEntry
-            }
         }
     }
 
