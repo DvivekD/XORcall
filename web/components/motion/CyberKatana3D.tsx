@@ -76,9 +76,10 @@ export default function CyberKatana3D({
     scene.add(katanaMaster);
 
     // Alignment Pivot: Shifts sword center so the entire length is framed symmetrically
+    // Handle on top-right (X > 0), Scabbard on bottom-left (X < 0), Habaki in center (X ≈ 0)
     const katanaPivot = new THREE.Group();
-    katanaPivot.position.set(-1.5, 0, 0);
-    katanaPivot.rotation.y = -Math.PI / 2;
+    katanaPivot.position.set(1.35, 0, 0);
+    katanaPivot.rotation.y = Math.PI / 2;
     katanaMaster.add(katanaPivot);
 
     // Independent assemblies for kinematic separation
@@ -239,16 +240,16 @@ export default function CyberKatana3D({
       const entranceEase = 1 - Math.pow(1 - entranceTime, 3); // Cubic ease-out
 
       // 1. Angle:
-      // At mount, slides into diagonal (-22 deg = -0.384 rad).
-      // As scroll proceeds, levels smoothly from -22 deg to 0 deg.
-      const diagonalAngle = -0.384;
+      // At mount, slides into diagonal (+22 deg = +0.384 rad: Handle top-right, Saya bottom-left).
+      // As scroll proceeds, levels smoothly from +22 deg to 0 deg horizontal.
+      const diagonalAngle = 0.384;
       const levelProgress = Math.min(1, p / 0.18);
       const targetZ = THREE.MathUtils.lerp(diagonalAngle * entranceEase, 0.0, levelProgress);
       katanaMaster.rotation.z = THREE.MathUtils.lerp(katanaMaster.rotation.z, targetZ, 0.1);
 
       // 2. Unsheathe Kinematics:
-      // On initial mount: reveals gold habaki by ~15% (offset ~0.45 units along sword axis)
-      const initialRevealOffset = 0.45 * entranceEase;
+      // On initial mount: reveals gold habaki by ~15% (scabbard slides down-left by -0.45 units along sword axis)
+      const initialRevealOffset = -0.45 * entranceEase;
 
       // In scroll mode: splitProgress drives separation across the 5 phases
       const splitProgress = Math.min(1, Math.max(0, (p - 0.12) / 0.75));
