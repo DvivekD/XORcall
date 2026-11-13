@@ -10,6 +10,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 data class ThreatAnalysis(
@@ -24,18 +25,18 @@ data class ThreatAnalysis(
 
 /**
  * SherpaSTTManager
- * Dual-Engine real-time speech and acoustic analysis engine:
- * 1. Hardware PCM acoustic stream analysis for AI Voice Clones & Vocoder artifacts.
- * 2. Continuous Speech Recognizer with self-healing recovery loop on Android.
- * 3. Multi-Demographic Lexicon Spotter (Universal, Student, Senior, Working Professional).
+ * In-Process Acoustic & Lexicon Threat Engine:
+ * - 100% On-Device execution with zero external Google App IPC during active calls.
+ * - Hardware PCM acoustic stream analysis for AI Voice Clones & Vocoder artifacts.
+ * - High-speed Demographic Threat Lexicon evaluation (Universal, Student, Senior, Professional).
+ * - Standalone microphone recognition for Actor Roleplay with graceful fallback.
  */
 class SherpaSTTManager(
     private val assetManager: AssetManager,
     private val context: Context? = null
 ) {
     private var isInitialized: Boolean = false
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var isListening: Boolean = false
+    private var singleSessionRecognizer: SpeechRecognizer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val syntheticDetector = AcousticSyntheticDetector()
@@ -51,130 +52,7 @@ class SherpaSTTManager(
     }
 
     /**
-     * Start continuous live voice recognition using Android's speech recognizer.
-     * Includes self-healing recovery on errors (such as in-call microphone contention).
-     */
-    fun startContinuousListening(onTranscript: (text: String, isEndpoint: Boolean) -> Unit) {
-        val ctx = context ?: return
-        this.onLiveTranscriptUpdate = onTranscript
-        isListening = true
-
-        mainHandler.post {
-            createAndStartRecognizer(ctx)
-        }
-    }
-
-    private fun createAndStartRecognizer(ctx: Context) {
-        if (!isListening) return
-
-        try {
-            cleanupRecognizer()
-
-            if (SpeechRecognizer.isRecognitionAvailable(ctx)) {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(ctx).apply {
-                    setRecognitionListener(object : RecognitionListener {
-                        override fun onReadyForSpeech(params: Bundle?) {}
-                        override fun onBeginningOfSpeech() {}
-                        override fun onRmsChanged(rmsdB: Float) {}
-                        override fun onBufferReceived(buffer: ByteArray?) {}
-                        override fun onEndOfSpeech() {}
-
-                        override fun onError(error: Int) {
-                            // Self-healing recovery: destroy and recreate cleanly
-                            if (isListening) {
-                                mainHandler.postDelayed({
-                                    if (isListening) {
-                                        createAndStartRecognizer(ctx)
-                                    }
-                                }, 800)
-                            }
-                        }
-
-                        override fun onResults(results: Bundle?) {
-                            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            val text = matches?.firstOrNull() ?: ""
-                            if (text.isNotBlank()) {
-                                onLiveTranscriptUpdate?.invoke(text, true)
-                                val analysis = analyzeText(text, activeScope)
-                                if (analysis.isScamDetected) {
-                                    onThreatDetected?.invoke(analysis, text)
-                                }
-                            }
-                            if (isListening) {
-                                mainHandler.postDelayed({
-                                    if (isListening) {
-                                        startListeningIntent()
-                                    }
-                                }, 300)
-                            }
-                        }
-
-                        override fun onPartialResults(partialResults: Bundle?) {
-                            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            val text = matches?.firstOrNull() ?: ""
-                            if (text.isNotBlank()) {
-                                onLiveTranscriptUpdate?.invoke(text, false)
-                                val analysis = analyzeText(text, activeScope)
-                                if (analysis.isScamDetected) {
-                                    onThreatDetected?.invoke(analysis, text)
-                                }
-                            }
-                        }
-
-                        override fun onEvent(eventType: Int, params: Bundle?) {}
-                    })
-                }
-                startListeningIntent()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            if (isListening) {
-                mainHandler.postDelayed({
-                    if (isListening) createAndStartRecognizer(ctx)
-                }, 1200)
-            }
-        }
-    }
-
-    private fun startListeningIntent() {
-        try {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
-            }
-            speechRecognizer?.startListening(intent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            val ctx = context ?: return
-            if (isListening) {
-                mainHandler.postDelayed({
-                    if (isListening) createAndStartRecognizer(ctx)
-                }, 800)
-            }
-        }
-    }
-
-    private fun cleanupRecognizer() {
-        try {
-            speechRecognizer?.cancel()
-            speechRecognizer?.destroy()
-        } catch (_: Exception) {}
-        speechRecognizer = null
-    }
-
-    fun stopContinuousListening() {
-        isListening = false
-        mainHandler.post {
-            cleanupRecognizer()
-        }
-    }
-
-    /**
-     * Evaluates text using DemographicThreatLexicon and current AI synthetic voice status.
+     * Evaluates text against DemographicThreatLexicon and current AI synthetic voice status.
      */
     fun analyzeText(text: String, scope: DemographicVector = activeScope): ThreatAnalysis {
         val result = DemographicThreatLexicon.evaluate(text, scope)
@@ -207,7 +85,8 @@ class SherpaSTTManager(
     }
 
     /**
-     * Processes PCM float audio buffer from hardware for acoustic vocoder & voice clone detection.
+     * Processes amplified PCM float audio buffer from hardware for acoustic vocoder & voice clone detection.
+     * Evaluates biological vocal cord micro-jitter and high-frequency spectral roll-off (>8kHz boundary).
      */
     fun acceptAudioChunk(samples: FloatArray, onTranscript: ((text: String, isEndpoint: Boolean) -> Unit)? = null) {
         if (samples.isEmpty()) return
@@ -231,8 +110,71 @@ class SherpaSTTManager(
         }
     }
 
+    /**
+     * Single session speech recognition for actor roleplay tests (when not in call).
+     */
+    fun startSingleRoleplaySession(
+        onResult: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val ctx = context ?: return
+        mainHandler.post {
+            try {
+                destroySingleRecognizer()
+                if (SpeechRecognizer.isRecognitionAvailable(ctx)) {
+                    singleSessionRecognizer = SpeechRecognizer.createSpeechRecognizer(ctx).apply {
+                        setRecognitionListener(object : RecognitionListener {
+                            override fun onReadyForSpeech(params: Bundle?) {}
+                            override fun onBeginningOfSpeech() {}
+                            override fun onRmsChanged(rmsdB: Float) {}
+                            override fun onBufferReceived(buffer: ByteArray?) {}
+                            override fun onEndOfSpeech() {}
+                            override fun onError(error: Int) {
+                                val msg = when (error) {
+                                    SpeechRecognizer.ERROR_AUDIO -> "Audio recording busy or in call"
+                                    SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized"
+                                    SpeechRecognizer.ERROR_NETWORK -> "Network offline"
+                                    else -> "Speech recognition error code $error"
+                                }
+                                onError(msg)
+                                destroySingleRecognizer()
+                            }
+                            override fun onResults(results: Bundle?) {
+                                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                                val text = matches?.firstOrNull() ?: ""
+                                onResult(text)
+                                destroySingleRecognizer()
+                            }
+                            override fun onPartialResults(partialResults: Bundle?) {}
+                            override fun onEvent(eventType: Int, params: Bundle?) {}
+                        })
+                    }
+
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                    }
+                    singleSessionRecognizer?.startListening(intent)
+                } else {
+                    onError("Speech recognition service not available on this device")
+                }
+            } catch (e: Exception) {
+                onError("Failed to start microphone: ${e.message}")
+            }
+        }
+    }
+
+    private fun destroySingleRecognizer() {
+        try {
+            singleSessionRecognizer?.cancel()
+            singleSessionRecognizer?.destroy()
+        } catch (_: Exception) {}
+        singleSessionRecognizer = null
+    }
+
     fun release() {
-        stopContinuousListening()
+        destroySingleRecognizer()
         syntheticDetector.reset()
         isInitialized = false
     }

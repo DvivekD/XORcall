@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">XORcall</string>
+    <string name="accessibility_service_description">Autonomous In-Call Cyber Guardian. Directly intercepts call audio output and prevents extortion coercion, Digital Arrests, and AI voice cloning.</string>
 </resources>
