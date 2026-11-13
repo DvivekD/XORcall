@@ -3,6 +3,13 @@
 > *Developed for Colossus 3.0 (Cyber Safety / AI for Social Good Track)*  
 > **Team KANYARASI**: Likhith Venkata Sai & Shruthishree Mohapatra
 
+[![Android APK v1.0.2](https://img.shields.io/badge/Android%20APK-v1.0.2--PROD-emerald?logo=android&style=for-the-badge)](https://github.com/DvivekD/XORcall/releases/download/v1.0.2-apk/XORcall-v1.0.2-debug.apk)
+[![Web Command Center](https://img.shields.io/badge/Live%20Web-XORcall%20Guardian-blue?logo=vercel&style=for-the-badge)](https://xorcall-guardian.vercel.app)
+[![CI Build](https://img.shields.io/badge/GitHub%20Actions-Passing-brightgreen?logo=githubactions&style=for-the-badge)](https://github.com/DvivekD/XORcall/actions)
+
+📥 **Direct Handset Download (Vivo V25 Pro / Android 14)**:  
+👉 **[Download XORcall-v1.0.2-debug.apk](https://github.com/DvivekD/XORcall/releases/download/v1.0.2-apk/XORcall-v1.0.2-debug.apk)** (8.86 MB)
+
 ---
 
 ## 🎯 Round 1 Evaluation Upgrade: Addressing the 3 Judge Inputs
@@ -107,7 +114,13 @@ pnpm dev
 ```
 Web platform will be live at: `http://localhost:3000`.
 
-### 3. Run Backend Test Suite
+### 3. Install & Test Android Mobile Guardian (`v1.0.2`)
+1. Download **[XORcall-v1.0.2-debug.apk](https://github.com/DvivekD/XORcall/releases/download/v1.0.2-apk/XORcall-v1.0.2-debug.apk)** onto your Android handset (e.g., Vivo V25 Pro).
+2. Tap **Install** and grant microphone, notification, and phone state permissions.
+3. Tap **`🎙️ Speak With My Voice`** to speak live extortion phrases (*"accident in hospital"*, *"police digital arrest transfer money"*) to verify real-time keyword spotting, tactile sensory haptics, and heads-up alert pings.
+4. Or tap **`💥 Accident Bail`** or **`🚨 Digital Arrest`** for 1-tap instant scenario testing.
+
+### 4. Run Backend Test Suite
 ```bash
 pytest backend/tests -v
 ```
