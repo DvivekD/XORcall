@@ -171,7 +171,12 @@ fun MainScreen(
     var isWhitelistContactsEnabled by remember { mutableStateOf(settingsManager.isWhitelistContactsEnabled) }
     var isAutoAllowBanksEnabled by remember { mutableStateOf(settingsManager.isAutoAllowBanksEnabled) }
     var isAiVoiceDetectionArmed by remember { mutableStateOf(settingsManager.isAiVoiceDetectionArmed) }
+    var isAutoSpeakerphoneEnabled by remember { mutableStateOf(settingsManager.isAutoSpeakerphoneEnabled) }
     var isAccessibilityActive by remember { mutableStateOf(XORcallAccessibilityService.isServiceRunning) }
+    var groqApiKey by remember { mutableStateOf(settingsManager.groqApiKey) }
+    var showGroqKeyDialog by remember { mutableStateOf(false) }
+    var groqKeyInput by remember { mutableStateOf(settingsManager.groqApiKey) }
+    var latestAcousticResult by remember { mutableStateOf<AcousticAnalysisResult?>(null) }
 
     var liveTranscript by remember { mutableStateOf("Ready. Speak into phone — live words will transcribe here...") }
     var lastThreatMessage by remember { mutableStateOf<String?>(null) }
@@ -202,11 +207,18 @@ fun MainScreen(
             isUnpacking = false
             voskErrorMessage = null
         }
+        sttManager.onAcousticResult = { result ->
+            latestAcousticResult = result
+            if (result.isSyntheticVoice) {
+                lastAiVoiceStatus = result.analysisReason
+            }
+        }
         onDispose { }
     }
 
     LaunchedEffect(Unit) {
         refreshHistory()
+        sttManager.updateCloudConfig(settingsManager.groqApiKey, settingsManager.backendUrl)
         sttManager.initializeVosk(this)
     }
 
@@ -464,6 +476,11 @@ fun MainScreen(
                     isReady = isVoskReady,
                     isUnpacking = isUnpacking,
                     errorMessage = voskErrorMessage,
+                    groqApiKey = groqApiKey,
+                    onConfigureGroqKey = {
+                        groqKeyInput = groqApiKey
+                        showGroqKeyDialog = true
+                    },
                     onInitClick = {
                         sttManager.initializeVosk(coroutineScope)
                     }
@@ -535,6 +552,11 @@ fun MainScreen(
                     onToggleAiVoice = {
                         isAiVoiceDetectionArmed = it
                         settingsManager.isAiVoiceDetectionArmed = it
+                    },
+                    autoSpeakerphone = isAutoSpeakerphoneEnabled,
+                    onToggleAutoSpeakerphone = {
+                        isAutoSpeakerphoneEnabled = it
+                        settingsManager.isAutoSpeakerphoneEnabled = it
                     }
                 )
             }
@@ -545,6 +567,7 @@ fun MainScreen(
                     activeVector = activeVector,
                     liveTranscript = liveTranscript,
                     aiVoiceStatus = lastAiVoiceStatus,
+                    acousticResult = latestAcousticResult,
                     isLiveTranscribing = isShieldActive,
                     isMicTesting = isMicTesting,
                     audioRms = liveAudioRms,
@@ -722,6 +745,71 @@ fun MainScreen(
         )
     }
 
+    // Groq Whisper API Key Configuration Dialog
+    if (showGroqKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showGroqKeyDialog = false },
+            title = {
+                Text("⚡ Groq Whisper Turbo Cloud STT", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+            },
+            text = {
+                Column {
+                    Text(
+                        "Enter your Groq API Key to enable Whisper Turbo (whisper-large-v3-turbo). Delivers sub-200ms real-time transcription with high Indian English and Hinglish accuracy.",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = groqKeyInput,
+                        onValueChange = { groqKeyInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("gsk_...", fontSize = 11.sp, color = Color(0xFF64748B)) },
+                        label = { Text("Groq API Key", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF10B981),
+                            unfocusedBorderColor = Color(0xFF334155)
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Leave blank to use 100% On-Device Offline Vosk STT.",
+                        color = Color(0xFF64748B),
+                        fontSize = 9.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = groqKeyInput.trim()
+                        groqApiKey = trimmed
+                        settingsManager.groqApiKey = trimmed
+                        sttManager.updateCloudConfig(trimmed, settingsManager.backendUrl)
+                        showGroqKeyDialog = false
+                        Toast.makeText(
+                            context,
+                            if (trimmed.isNotBlank()) "Groq Whisper Turbo Armed! (Cloud Hybrid STT)" else "Reverted to 100% On-Device Vosk",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                ) {
+                    Text("Save & Arm", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showGroqKeyDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // 1930 Dossier Preview Dialog
     dossierPreviewDialog?.let { dossier ->
         AlertDialog(
@@ -863,7 +951,9 @@ fun SmartWhitelistingCard(
     allowOfficialBanks: Boolean,
     onToggleAllowOfficialBanks: (Boolean) -> Unit,
     aiVoiceArmed: Boolean,
-    onToggleAiVoice: (Boolean) -> Unit
+    onToggleAiVoice: (Boolean) -> Unit,
+    autoSpeakerphone: Boolean = true,
+    onToggleAutoSpeakerphone: (Boolean) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -893,7 +983,8 @@ fun SmartWhitelistingCard(
 
         InterventionRow("Whitelist Saved Contacts (Friends / Manager)", whitelistContacts, onToggleWhitelistContacts)
         InterventionRow("Auto-Allow Verified Banks & Police (1800 SBI/HDFC, 112)", allowOfficialBanks, onToggleAllowOfficialBanks)
-        InterventionRow("Neural AI Voice Clone Decoding (8kHz Shelf & Jitter)", aiVoiceArmed, onToggleAiVoice)
+        InterventionRow("Neural AI Voice Clone Decoding (FFT & Micro-Jitter)", aiVoiceArmed, onToggleAiVoice)
+        InterventionRow("Auto-Speakerphone In-Call Capture (Loudspeaker Intercept)", autoSpeakerphone, onToggleAutoSpeakerphone)
     }
 }
 
@@ -902,6 +993,7 @@ fun DemographicThreatTesterCard(
     activeVector: DemographicVector,
     liveTranscript: String,
     aiVoiceStatus: String?,
+    acousticResult: AcousticAnalysisResult? = null,
     isLiveTranscribing: Boolean,
     isMicTesting: Boolean = false,
     audioRms: Float = 0f,
@@ -1004,6 +1096,11 @@ fun DemographicThreatTesterCard(
                     )
                 }
             }
+        }
+
+        if (acousticResult != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            AcousticRadarCard(acousticResult)
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -1548,68 +1645,204 @@ fun ModelStatusCard(
     isReady: Boolean,
     isUnpacking: Boolean,
     errorMessage: String? = null,
+    groqApiKey: String = "",
+    onConfigureGroqKey: () -> Unit = {},
     onInitClick: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(if (isReady) Color(0xFF064E3B) else Color(0xFF1E1B4B))
             .border(1.dp, if (isReady) Color(0xFF059669) else Color(0xFF6366F1), RoundedCornerShape(10.dp))
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Text(if (isReady) "🧠" else "⏳", fontSize = 18.sp)
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = if (isReady) "ON-DEVICE VOSK ENGINE: ARMED (100% OFFLINE)" else "ON-DEVICE VOSK ENGINE: INITIALIZING",
-                    color = if (isReady) Color(0xFF6EE7B7) else Color(0xFFA5B4FC),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                if (errorMessage != null) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Text(if (isReady) "🧠" else "⏳", fontSize = 18.sp)
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
                     Text(
-                        text = "Error: $errorMessage",
-                        color = Color(0xFFF87171),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
+                        text = if (isReady) "ON-DEVICE VOSK ENGINE: ARMED (100% OFFLINE)" else "ON-DEVICE VOSK ENGINE: INITIALIZING",
+                        color = if (isReady) Color(0xFF6EE7B7) else Color(0xFFA5B4FC),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
                     )
-                } else if (isUnpacking) {
-                    Text(
-                        text = "Unpacking offline speech model from APK... (0.5s)",
-                        color = Color.White,
-                        fontSize = 9.sp
-                    )
-                } else if (isReady) {
-                    Text(
-                        text = "100% Offline Kaldi Model Bundled. Direct Telephony Capture Active.",
-                        color = Color.White,
-                        fontSize = 9.sp
-                    )
-                } else {
-                    Text(
-                        text = "Tap to initialize offline speech recognition model.",
-                        color = Color.White,
-                        fontSize = 9.sp
-                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    if (errorMessage != null) {
+                        Text(
+                            text = "Error: $errorMessage",
+                            color = Color(0xFFF87171),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else if (isUnpacking) {
+                        Text(
+                            text = "Unpacking offline speech model from APK... (0.5s)",
+                            color = Color.White,
+                            fontSize = 9.sp
+                        )
+                    } else if (isReady) {
+                        Text(
+                            text = "100% Offline Kaldi Model Bundled. Instant local baseline.",
+                            color = Color.White,
+                            fontSize = 9.sp
+                        )
+                    } else {
+                        Text(
+                            text = "Tap to initialize offline speech recognition model.",
+                            color = Color.White,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
+            }
+            if (!isReady && !isUnpacking) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = onInitClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text("Arm Engine", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
-        if (!isReady && !isUnpacking) {
-            Spacer(modifier = Modifier.width(8.dp))
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Hybrid Cloud STT Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF030712))
+                .border(0.5.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Text(if (groqApiKey.isNotBlank()) "⚡" else "☁️", fontSize = 12.sp)
+                Spacer(modifier = Modifier.width(6.dp))
+                Column {
+                    Text(
+                        text = if (groqApiKey.isNotBlank()) "HYBRID CLOUD WHISPER TURBO: ACTIVE" else "CLOUD WHISPER STT: CONFIGURE KEY",
+                        color = if (groqApiKey.isNotBlank()) Color(0xFF34D399) else Color(0xFF93C5FD),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (groqApiKey.isNotBlank()) "Groq LPU sub-200ms Indian English & Hinglish decoding" else "Tap 'Set Key' to arm Groq Whisper Turbo cloud STT",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 8.sp
+                    )
+                }
+            }
             Button(
-                onClick = onInitClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
-                shape = RoundedCornerShape(6.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                onClick = onConfigureGroqKey,
+                colors = ButtonDefaults.buttonColors(containerColor = if (groqApiKey.isNotBlank()) Color(0xFF065F46) else Color(0xFF2563EB)),
+                shape = RoundedCornerShape(4.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
             ) {
-                Text("Arm Engine", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(if (groqApiKey.isNotBlank()) "Key Set ✓" else "Set Key", fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
+    }
+}
+
+@Composable
+fun AcousticRadarCard(result: AcousticAnalysisResult) {
+    val isSynthetic = result.isSyntheticVoice
+    val confPct = (result.syntheticConfidence * 100).toInt()
+    val badgeBg = if (isSynthetic) Color(0xFF7F1D1D) else (if (result.syntheticConfidence > 0.40f) Color(0xFF78350F) else Color(0xFF064E3B))
+    val badgeBorder = if (isSynthetic) Color(0xFFEF4444) else (if (result.syntheticConfidence > 0.40f) Color(0xFFF59E0B) else Color(0xFF10B981))
+    val badgeText = if (isSynthetic) "🚨 AI SYNTHETIC VOICE CLONE ($confPct%)" else (if (result.syntheticConfidence > 0.40f) "🟡 ANALYZING HARMONICS ($confPct%)" else "🟢 BIOLOGICAL HUMAN VOICE ($confPct%)")
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF020617))
+            .border(1.dp, badgeBorder.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+            .padding(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "🧠 ACOUSTIC FORENSIC RADAR",
+                color = Color(0xFFA5B4FC),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(badgeBg)
+                    .border(0.5.dp, badgeBorder, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = badgeText,
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 3 Key Forensic Metrics
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("MICRO-JITTER", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "${String.format(java.util.Locale.US, "%.2f", result.pitchJitterEstimate)}%",
+                    color = if (result.pitchJitterEstimate < 0.35f && result.isVoicedSpeech) Color(0xFFF87171) else Color(0xFFE2E8F0),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("Human: 0.5-2.5%", color = Color(0xFF475569), fontSize = 7.sp)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text("HF RATIO (>6.5k)", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = String.format(java.util.Locale.US, "%.4f", result.highFrequencyEnergyRatio),
+                    color = if (result.highFrequencyEnergyRatio < 0.005f) Color(0xFFF87171) else Color(0xFFE2E8F0),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("Vocoder Shelf", color = Color(0xFF475569), fontSize = 7.sp)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text("WIENER ENTROPY", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = String.format(java.util.Locale.US, "%.3f", result.spectralFlatness),
+                    color = if (result.spectralFlatness > 0.45f) Color(0xFFF87171) else Color(0xFFE2E8F0),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("Spectral Flatness", color = Color(0xFF475569), fontSize = 7.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = result.analysisReason,
+            color = if (isSynthetic) Color(0xFFFCA5A5) else Color(0xFF94A3B8),
+            fontSize = 9.sp,
+            lineHeight = 12.sp
+        )
     }
 }

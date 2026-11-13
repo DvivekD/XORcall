@@ -45,27 +45,26 @@ jobs:
 
       - name: Copy & Rename APK
         run: |
-          mkdir -p build-artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.1.0-debug.apk
+            mkdir -p build-artifacts
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.0-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.1.0-debug.apk
+          path: build-artifacts/XORcall-v1.2.0-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0-apk
-          name: "XORcall v1.1.0 Android APK (Direct Telephony Audio Interceptor + Phonetic Extortion Normalizer)"
+          tag_name: v1.2.0-apk
+          name: "XORcall v1.2.0 Android APK (Auto-Speakerphone Intercept + Groq Whisper STT + AI Voice Clone Radar)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.1.0
-            - **Direct Telephony Audio Interception**: Ingests in-call audio directly from the device's voice communication mixer (`VOICE_CALL` / `VOICE_COMMUNICATION` / `VOICE_DOWNLINK`) upon `OFFHOOK`, without needing physical loudspeaker playback.
-            - **Hardware Digital AGC Pre-Amplifier**: Amplifies quiet remote caller audio by +20dB with hyperbolic tangent (`tanh`) soft-limiter to prevent distortion while maximizing Vosk speech sensitivity.
-            - **Phonetic Speech Normalizer**: Resolves Indian English extortion speech patterns transcribed by US English acoustic models (`"five lacks"`, `"five lock"`, `"50 lacks"` -> canonical `"5 lakh"`, `"kid nap"` -> `"kidnap"`, `"c b i"` -> `"cbi"`).
-            - **Multi-Listener Thread-Safe STT Pipeline**: Prevents service and activity listener overwrites, with atomic model extraction verification.
-            - **Real-Time Live Audio Energy Meter**: Displays real-time audio capture energy (RMS %) and selected audio source directly on the dashboard.
-          files: build-artifacts/XORcall-v1.1.0-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.0
+            - **Auto-Speakerphone In-Call Capture**: Automatically engages loudspeaker upon `OFFHOOK` and binds raw `MIC` stream with +20dB digital AGC amplification, allowing the phone to capture both the remote caller's audio and the user's speech without being stripped by Android hardware echo cancellation.
+            - **Dual Hybrid Speech Pipeline (Groq Whisper Turbo + Vosk Offline)**: Integrates Groq LPU Whisper Turbo (`whisper-large-v3-turbo`) for sub-200ms cloud transcription with superior Indian English and vernacular accuracy, while retaining bundled on-device Vosk Kaldi as instant offline fallback.
+            - **Scientific AI Voice Clone Radar**: 512-point windowed Cooley-Tukey FFT spectral analysis, high-frequency vocoder cutoff ratio (>6.5 kHz), Wiener entropy spectral flatness, and Normalized Autocorrelation pitch micro-jitter tracking (0.5%-2.5% biological human vs <0.3% neural vocoder rigidity).
+            - **Real-Time Live Forensic Dashboard**: Live acoustic radar displaying micro-jitter %, HF ratio, spectral entropy, and instant verdict (Human vs AI Clone).
+          files: build-artifacts/XORcall-v1.2.0-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

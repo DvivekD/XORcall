@@ -100,6 +100,7 @@ class CallMonitorService : Service(), TelemetryListener {
             callHistoryManager = CallHistoryManager(this)
 
             sttManager = SherpaSTTManager(assets, this)
+            sttManager.updateCloudConfig(settingsManager.groqApiKey, settingsManager.backendUrl)
             sttManager.initialize()
             sttManager.initializeVosk(scope)
             sttManager.activeScope = settingsManager.activeVector
@@ -167,6 +168,7 @@ class CallMonitorService : Service(), TelemetryListener {
     private fun reloadSettings() {
         hapticEngine.isHapticsEnabled = settingsManager.isHapticsEnabled
         sttManager.activeScope = settingsManager.activeVector
+        sttManager.updateCloudConfig(settingsManager.groqApiKey, settingsManager.backendUrl)
     }
 
     private fun toggleSpeakerphone() {
@@ -250,11 +252,34 @@ class CallMonitorService : Service(), TelemetryListener {
         if (callState == "OFFHOOK" || isAccessibilityIntercept) {
             isCallActive = true
             Log.i(TAG, "Call connected (OFFHOOK): Engaging Direct In-Call Audio Capture")
+            if (settingsManager.isAutoSpeakerphoneEnabled) {
+                try {
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.isSpeakerphoneOn = true
+                    Log.i(TAG, "Auto-speakerphone engaged on OFFHOOK for live call intercept")
+                    val speakerIntent = Intent("com.xorcall.SPEAKER_STATE").apply {
+                        putExtra("isSpeakerOn", true)
+                        setPackage(packageName)
+                    }
+                    sendBroadcast(speakerIntent)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Auto-speakerphone toggle failed", e)
+                }
+            }
             startAudioCapture(isCallOngoing = true)
         } else if (callState == "IDLE") {
             isCallActive = false
             currentCallerNumber = "Standby (Shield Armed)"
-            Log.i(TAG, "Call ended (IDLE): Returning to Standby Audio Capture")
+            Log.i(TAG, "Call ended (IDLE): Restoring normal audio routing")
+            try {
+                audioManager.isSpeakerphoneOn = false
+                audioManager.mode = AudioManager.MODE_NORMAL
+                val speakerIntent = Intent("com.xorcall.SPEAKER_STATE").apply {
+                    putExtra("isSpeakerOn", false)
+                    setPackage(packageName)
+                }
+                sendBroadcast(speakerIntent)
+            } catch (_: Exception) {}
             startAudioCapture(isCallOngoing = false)
         }
 
@@ -321,18 +346,18 @@ class CallMonitorService : Service(), TelemetryListener {
                 }
 
                 val inCallSources = listOf(
+                    Pair(MediaRecorder.AudioSource.MIC, "MIC (Loudspeaker Intercept)"),
+                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
+                    Pair(MediaRecorder.AudioSource.DEFAULT, "DEFAULT"),
                     Pair(MediaRecorder.AudioSource.VOICE_CALL, "VOICE_CALL (Direct Line)"),
                     Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex)"),
-                    Pair(MediaRecorder.AudioSource.VOICE_DOWNLINK, "VOICE_DOWNLINK (Remote Caller)"),
-                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
-                    Pair(MediaRecorder.AudioSource.MIC, "MIC"),
-                    Pair(MediaRecorder.AudioSource.DEFAULT, "DEFAULT")
+                    Pair(MediaRecorder.AudioSource.VOICE_DOWNLINK, "VOICE_DOWNLINK (Remote Caller)")
                 )
 
                 val standbySources = listOf(
-                    Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex)"),
-                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
                     Pair(MediaRecorder.AudioSource.MIC, "MIC"),
+                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
+                    Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex)"),
                     Pair(MediaRecorder.AudioSource.DEFAULT, "DEFAULT")
                 )
 
@@ -368,7 +393,18 @@ class CallMonitorService : Service(), TelemetryListener {
                     // Hardware Digital AGC Pre-Amplifier: +20dB boost (gain factor ~7.5) with soft saturation limiter
                     val digitalGain = 7.5f
 
+                    var loopIteration = 0
                     while (isRecording && isActive) {
+                        loopIteration++
+                        // Periodically reinforce speakerphone during active call
+                        if (isCallOngoing && loopIteration % 50 == 0 && settingsManager.isAutoSpeakerphoneEnabled) {
+                            if (!audioManager.isSpeakerphoneOn) {
+                                try {
+                                    audioManager.isSpeakerphoneOn = true
+                                } catch (_: Exception) {}
+                            }
+                        }
+
                         val readCount = record.read(pcmBuffer, 0, pcmBuffer.size)
                         if (readCount > 0) {
                             var sumSquares = 0.0

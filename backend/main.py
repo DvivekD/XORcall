@@ -13,6 +13,7 @@ from config import settings
 from detector.semantic_engine import SemanticEngine
 from detector.vision_forensics import VideoForensicsEngine
 from detector.voice_forensics import VoiceForensicsEngine
+from detector.cloud_stt import CloudSTTEngine
 from decoy.ramesh_gupta import RameshGuptaDecoy
 from services.family_broker import FamilyBroker
 from services.emergency_verifier import EmergencyVerifier
@@ -41,6 +42,7 @@ app.add_middleware(
 semantic_engine = SemanticEngine()
 vision_engine = VideoForensicsEngine()
 voice_engine = VoiceForensicsEngine()
+cloud_stt = CloudSTTEngine()
 family_broker = FamilyBroker()
 emergency_verifier = EmergencyVerifier()
 dossier_generator = DossierGenerator()
@@ -92,6 +94,23 @@ async def inspect_pcm(file: UploadFile = File(...)):
     """Analyzes raw 16kHz PCM audio buffer for neural vocoder cutoff / voice cloning."""
     pcm_bytes = await file.read()
     return voice_engine.analyze_pcm_buffer(pcm_bytes)
+
+@app.post("/api/stt/transcribe-pcm")
+async def transcribe_pcm_endpoint(file: UploadFile = File(...), language: str = "en"):
+    """
+    Transcribes a streaming raw 16kHz PCM audio buffer via Groq Whisper Turbo.
+    Returns high-accuracy transcript with Indian English & vernacular phonetic resilience.
+    """
+    pcm_bytes = await file.read()
+    return cloud_stt.transcribe_pcm(pcm_bytes, sample_rate=16000, language=language)
+
+@app.post("/api/stt/transcribe-wav")
+async def transcribe_wav_endpoint(file: UploadFile = File(...), language: str = "en"):
+    """Transcribes a standard WAV audio clip via Groq Whisper Turbo."""
+    wav_bytes = await file.read()
+    # Strip 44-byte WAV header to get PCM bytes if needed, or pass directly
+    pcm_bytes = wav_bytes[44:] if len(wav_bytes) > 44 and wav_bytes[:4] == b"RIFF" else wav_bytes
+    return cloud_stt.transcribe_pcm(pcm_bytes, sample_rate=16000, language=language)
 
 @app.post("/api/decoy/turn")
 def decoy_turn(payload: DecoyTurnPayload):

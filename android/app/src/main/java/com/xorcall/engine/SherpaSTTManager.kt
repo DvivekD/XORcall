@@ -3,7 +3,10 @@ package com.xorcall.engine
 import android.content.Context
 import android.content.Intent
 import android.content.res.AssetManager
+import com.xorcall.network.CloudSTTClient
 import kotlinx.coroutines.*
+import java.io.ByteArrayOutputStream
+import kotlin.math.sqrt
 
 data class ThreatAnalysis(
     val isScamDetected: Boolean,
@@ -18,12 +21,12 @@ data class ThreatAnalysis(
 
 /**
  * SherpaSTTManager
- * Coordinates On-Device Speech Transcription & Multi-Demographic Threat Interception:
- * - Powered by VoskSTTEngine (100% offline bundled model, works during live calls)
+ * Coordinates Speech Transcription & Multi-Demographic Threat Interception:
+ * - Dual Hybrid STT: High-Accuracy Cloud Whisper Turbo (Groq LPU) + Instant On-Device Vosk Fallback
  * - Integrates PhoneticSpeechNormalizer for robust Indian English extortion detection ("5 lakhs", "kidnap", "cbi")
  * - Streams live spoken words directly into UI transcript box in real-time
  * - Evaluates words against Extortion, Kidnap, Death Threats, and Demographic Vectors
- * - Analyzes raw PCM audio for AI synthetic voice clone signatures
+ * - Scientific Acoustic Synthetic Voice Detector (FFT + Jitter + Wiener Entropy)
  */
 class SherpaSTTManager(
     private val assetManager: AssetManager,
@@ -34,6 +37,8 @@ class SherpaSTTManager(
     private var latestAcousticResult: AcousticAnalysisResult? = null
 
     private var voskEngine: VoskSTTEngine? = null
+    val cloudSttClient = CloudSTTClient()
+    private val cloudScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     val isVoskReady: Boolean get() = voskEngine?.isReady == true
     val isUnpacking: Boolean get() = voskEngine?.isUnpacking == true
@@ -45,13 +50,29 @@ class SherpaSTTManager(
     var onLiveTranscriptUpdate: ((transcript: String, isEndpoint: Boolean) -> Unit)? = null
     var onModelReady: (() -> Unit)? = null
 
+    // Cloud STT Accumulator Buffer (~2 seconds of speech @ 16kHz 16-bit mono = 64,000 bytes)
+    private val cloudAudioBuffer = ByteArrayOutputStream(64000)
+    private var voicedChunksInCurrentBuffer = 0
+    private var lastSpeechTimestamp = 0L
+
     private val transcriptListener: (String, Boolean) -> Unit = { rawText, isFinal ->
         handleIncomingTranscript(rawText, isFinal)
+    }
+
+    fun updateCloudConfig(apiKey: String, serverUrl: String) {
+        cloudSttClient.updateConfig(apiKey, serverUrl)
     }
 
     fun initialize(modelPath: String = "model-en") {
         if (isInitialized) return
         val ctx = context ?: return
+
+        // Read stored configuration from settings
+        try {
+            val settings = GuardianSettingsManager(ctx)
+            cloudSttClient.updateConfig(settings.groqApiKey, settings.backendUrl)
+        } catch (_: Exception) {}
+
         voskEngine = VoskSTTEngine.getInstance(ctx).apply {
             addTranscriptListener(transcriptListener)
             onModelReady = {
@@ -69,7 +90,7 @@ class SherpaSTTManager(
         voskEngine?.initialize(scope)
     }
 
-    private fun handleIncomingTranscript(rawText: String, isFinal: Boolean) {
+    fun handleIncomingTranscript(rawText: String, isFinal: Boolean) {
         if (rawText.isBlank()) return
 
         // Normalize raw speech (e.g. "five lacks", "five lock" -> "5 lakh")
@@ -99,7 +120,10 @@ class SherpaSTTManager(
 
     /**
      * Feeds raw PCM 16-bit ShortArray from AudioRecord.
-     * Evaluated concurrently by Vosk STT and AcousticSyntheticDetector.
+     * Evaluated concurrently by:
+     * 1. On-Device Vosk STT (Instant offline local baseline)
+     * 2. Cloud Whisper Turbo (High-accuracy vernacular transcription dispatch)
+     * 3. Scientific AcousticSyntheticDetector (FFT spectral roll-off + micro-jitter)
      */
     fun acceptAudioChunkRaw(pcmShorts: ShortArray, count: Int) {
         if (count <= 0) return
@@ -114,18 +138,64 @@ class SherpaSTTManager(
         onAcousticResult?.invoke(acousticResult)
 
         if (acousticResult.isSyntheticVoice) {
-            val alertText = "Synthetic neural vocoder clone speaking on line."
+            val alertText = acousticResult.analysisReason
             val analysis = ThreatAnalysis(
                 isScamDetected = true,
                 matchedKeywords = listOf("AI_VOICE_CLONE"),
                 riskLevel = RiskLevel.CRITICAL,
-                warningMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE DETECTED! Voice is artificially generated.",
+                warningMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE CLONE DETECTED! Voice is artificially generated.",
                 demographicVector = activeScope,
                 isSyntheticVoice = true,
                 syntheticConfidence = acousticResult.syntheticConfidence,
                 normalizedTranscript = alertText
             )
             onThreatDetected?.invoke(analysis, alertText)
+        }
+
+        // 3. Cloud STT Audio Chunk Accumulation
+        // Convert shorts to bytes
+        val byteChunk = ByteArray(count * 2)
+        var sumSquares = 0.0
+        for (i in 0 until count) {
+            val s = pcmShorts[i]
+            byteChunk[i * 2] = (s.toInt() and 0xFF).toByte()
+            byteChunk[i * 2 + 1] = (s.toInt() shr 8 and 0xFF).toByte()
+            sumSquares += s.toDouble() * s.toDouble()
+        }
+        val rms = sqrt(sumSquares / count) / 32768.0
+
+        val now = System.currentTimeMillis()
+        if (rms > 0.012) {
+            voicedChunksInCurrentBuffer++
+            lastSpeechTimestamp = now
+        }
+
+        synchronized(cloudAudioBuffer) {
+            cloudAudioBuffer.write(byteChunk)
+            val currentBytes = cloudAudioBuffer.size()
+
+            // Trigger cloud transcription when:
+            // A) Buffer reaches ~2 seconds of audio (64,000 bytes) AND had active speech, OR
+            // B) Buffer has >= 1 second of speech AND speaker paused for > 350ms
+            val hasEnoughSpeech = voicedChunksInCurrentBuffer >= 4
+            val isBufferFull = currentBytes >= 64000
+            val isSpeechPaused = (now - lastSpeechTimestamp > 350) && currentBytes >= 32000
+
+            if (hasEnoughSpeech && (isBufferFull || isSpeechPaused)) {
+                val pcmToDispatch = cloudAudioBuffer.toByteArray()
+                cloudAudioBuffer.reset()
+                voicedChunksInCurrentBuffer = 0
+
+                cloudSttClient.transcribePcmAsync(cloudScope, pcmToDispatch) { transcript, source ->
+                    if (transcript.isNotBlank()) {
+                        handleIncomingTranscript(transcript, true)
+                    }
+                }
+            } else if (currentBytes > 128000) {
+                // Safeguard against unbound buffer growth during continuous loud noise
+                cloudAudioBuffer.reset()
+                voicedChunksInCurrentBuffer = 0
+            }
         }
     }
 
@@ -140,7 +210,7 @@ class SherpaSTTManager(
         onAcousticResult?.invoke(acousticResult)
 
         if (acousticResult.isSyntheticVoice) {
-            val alertText = "Synthetic neural vocoder clone speaking on line."
+            val alertText = acousticResult.analysisReason
             val analysis = ThreatAnalysis(
                 isScamDetected = true,
                 matchedKeywords = listOf("AI_VOICE_CLONE"),
@@ -203,6 +273,7 @@ class SherpaSTTManager(
     fun release() {
         voskEngine?.removeTranscriptListener(transcriptListener)
         syntheticDetector.reset()
+        cloudScope.cancel()
         isInitialized = false
     }
 }

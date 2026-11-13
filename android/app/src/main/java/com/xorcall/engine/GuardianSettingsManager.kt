@@ -25,6 +25,10 @@ class GuardianSettingsManager(private val context: Context) {
         private const val KEY_AUTO_ALLOW_BANKS = "pref_auto_allow_banks_enabled"
         private const val KEY_AI_VOICE_DETECTION = "pref_ai_voice_detection_enabled"
         private const val KEY_ACTIVE_VECTOR = "pref_active_vector"
+        private const val KEY_GROQ_API_KEY = "pref_groq_api_key"
+        private const val KEY_BACKEND_URL = "pref_backend_url"
+        private const val KEY_AUTO_SPEAKERPHONE = "pref_auto_speakerphone_enabled"
+        private const val KEY_CLOUD_STT = "pref_cloud_stt_enabled"
     }
 
     var isHapticsEnabled: Boolean
@@ -87,6 +91,34 @@ class GuardianSettingsManager(private val context: Context) {
         }
         set(value) {
             prefs.edit().putString(KEY_ACTIVE_VECTOR, value.name).apply()
+            notifyChange()
+        }
+
+    var groqApiKey: String
+        get() = prefs.getString(KEY_GROQ_API_KEY, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_GROQ_API_KEY, value.trim()).apply()
+            notifyChange()
+        }
+
+    var backendUrl: String
+        get() = prefs.getString(KEY_BACKEND_URL, "https://api.xorcall.kanyarasi.live") ?: "https://api.xorcall.kanyarasi.live"
+        set(value) {
+            prefs.edit().putString(KEY_BACKEND_URL, value.trim()).apply()
+            notifyChange()
+        }
+
+    var isAutoSpeakerphoneEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_SPEAKERPHONE, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_AUTO_SPEAKERPHONE, value).apply()
+            notifyChange()
+        }
+
+    var isCloudSttEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CLOUD_STT, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_CLOUD_STT, value).apply()
             notifyChange()
         }
 
