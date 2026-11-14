@@ -211,6 +211,12 @@ class SherpaSTTManager(
     fun resetAcousticRadar() {
         syntheticDetector.reset()
         latestAcousticResult = null
+        synchronized(cloudAudioBuffer) {
+            cloudAudioBuffer.reset()
+            voicedChunksInCurrentBuffer = 0
+            lastSpeechTimestamp = 0L
+        }
+        voskEngine?.reset()
     }
 
     fun startAlwaysOnLiveListening(onTranscript: (text: String, isEndpoint: Boolean) -> Unit) {

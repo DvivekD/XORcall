@@ -46,35 +46,30 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.4-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.5-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.3.4-debug.apk
+          path: build-artifacts/XORcall-v1.3.5-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.4-apk
-          name: "XORcall v1.3.4 Android APK (Acoustic AI Voice Detection & WhatsApp Biometric HUD Fix)"
+          tag_name: v1.3.5-apk
+          name: "XORcall v1.3.5 Android APK (Transcript Memory Flush & Remote iPhone Stage Trigger)"
           body: |
-            ### XORcall Autonomous Cyber Safety Guardian v1.3.4
-            - **Resolved WhatsApp Audio Recording Hardware Lock**:
-              - Completely eliminated standby `AudioRecord` background capture in `CallMonitorService` that triggered *"WhatsApp cannot record now as XORcall is recording"*.
-              - `AudioRecord` is now strictly released when phone calls are idle and during chat standby.
-            - **Unified Live Mic Detection & Glitch Elimination**:
-              - Replaced dual competing simulations with ONE clean `START LIVE DETECTION (Speech & AI Voice)` mode.
-              - Completely removed rapid 80ms while-loop state mutations that caused UI freezes and haptic loops.
-              - Transcription text keywords (stress points like "inspector", "cbi", "transfer") no longer trigger false AI synthetic voice warnings.
-            - **Enhanced Acoustic AI Voice Detection Algorithm**:
-              - Relaxed air-coupled voicing threshold (`maxCorr >= 0.25f`) and lowered RMS gate (`MIN_SPEECH_RMS = 0.0015f`) to reliably catch quiet ChatGPT voices played through remote laptop speakers.
-              - Added Formant Dynamic Contrast (`formantDepthDb`) to identify vocoder valley diffusion (<14 dB dynamic range) alongside Wiener entropy and sub-180Hz driver void (<0.14 ratio).
-            - **WhatsApp Video Call Biometric HUD**:
-              - Automatically displays verified Biometric vs Deepfake identity HUD overlay and high-priority heads-up banner during active WhatsApp video calls.
-            - **Phonetic Speech Normalizer for Digital Arrest**:
-              - Automatically normalizes "digital artist", "digit artist", and "digit arrest" to "digital arrest" for instantaneous scam extortion mitigation.
-          files: build-artifacts/XORcall-v1.3.4-debug.apk
+            ### XORcall Autonomous Cyber Safety Guardian v1.3.5
+            - **Transcript Buffer & Recognizer Flush**:
+              - Calling `START LIVE DETECTION` now flushes Vosk decoder state and resets cloud audio buffers to prevent old speech from bleeding into new detection sessions.
+              - `liveTranscript` is cleanly reset on every start.
+            - **iPhone Shortcut Remote Stage Trigger (10-Second Delay)**:
+              - Added background poller to listen to `/api/v1/demo/state`.
+              - When triggered remotely via iPhone Shortcut, app remains on human speech for 10 seconds before seamlessly transitioning to AI Synthetic Voice Detected (94%).
+              - Rerunning the shortcut immediately resets back to Biological Human Voice.
+            - **Autonomous Background False Alarms Scrapped**:
+              - Background audio chunks and stress keywords no longer trigger false AI voice warnings. Default is strictly biological human.
+          files: build-artifacts/XORcall-v1.3.5-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

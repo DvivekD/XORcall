@@ -250,6 +250,18 @@ class VoskSTTEngine private constructor(private val context: Context) {
         }
     }
 
+    fun reset() {
+        synchronized(recognizerLock) {
+            try {
+                recognizer?.reset()
+            } catch (_: Throwable) {
+                try {
+                    recognizer?.result
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+
     fun release() {
         synchronized(recognizerLock) {
             try {

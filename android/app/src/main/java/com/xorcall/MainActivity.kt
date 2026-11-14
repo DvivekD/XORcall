@@ -405,6 +405,7 @@ fun MainScreen(
     fun startDirectMicTest() {
         if (isMicTesting) {
             isMicTesting = false
+            sttManager.resetAcousticRadar()
             return
         }
         val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -412,9 +413,9 @@ fun MainScreen(
             Toast.makeText(context, "Please grant microphone permission first", Toast.LENGTH_SHORT).show()
             return
         }
-        isMicTesting = true
-        liveTranscript = "🔴 RECORDING LIVE MIC: Speak or play voice audio to classify..."
         sttManager.resetAcousticRadar()
+        isMicTesting = true
+        liveTranscript = "🔴 RECORDING LIVE MIC: Listening for fresh speech..."
 
         coroutineScope.launch {
             try {
@@ -476,8 +477,9 @@ fun MainScreen(
             } finally {
                 isMicTesting = false
                 liveAudioRms = 0f
+                sttManager.resetAcousticRadar()
                 if (liveTranscript.startsWith("🔴 RECORDING")) {
-                    liveTranscript = "Live mic idle. Spoken words transcribed above."
+                    liveTranscript = "Live mic idle. Ready to analyze spoken voice."
                 }
             }
         }
