@@ -50,6 +50,37 @@ class AcousticSyntheticDetectorTest {
     }
 
     @Test
+    fun testLoudspeakerAirGapVsProximityDetection() {
+        val detector = AcousticSyntheticDetector()
+        val sampleRate = 16000f
+
+        // 1. Simulate loudspeaker replay (ChatGPT from laptop): 500 Hz + 1000 Hz with ZERO sub-180Hz energy
+        var laptopResult: AcousticAnalysisResult? = null
+        for (chunkIdx in 0 until 6) {
+            val chunk = FloatArray(1024) { i ->
+                val t = (chunkIdx * 1024 + i) / sampleRate
+                (sin(2 * PI * 500.0 * t) + 0.6 * sin(2 * PI * 1000.0 * t)).toFloat() * 0.4f
+            }
+            laptopResult = detector.analyzeAudioChunk(chunk)
+        }
+        assertNotNull(laptopResult)
+        assertTrue("Laptop speaker without sub-180Hz energy must have low sub-bass ratio (<0.15)", laptopResult!!.subBassProximityRatio < 0.15f)
+
+        // 2. Simulate authentic human speech with 120 Hz near-field proximity resonance
+        val detectorHuman = AcousticSyntheticDetector()
+        var humanResult: AcousticAnalysisResult? = null
+        for (chunkIdx in 0 until 6) {
+            val chunk = FloatArray(1024) { i ->
+                val t = (chunkIdx * 1024 + i) / sampleRate
+                (1.2 * sin(2 * PI * 120.0 * t) + 0.4 * sin(2 * PI * 400.0 * t)).toFloat() * 0.4f
+            }
+            humanResult = detectorHuman.analyzeAudioChunk(chunk)
+        }
+        assertNotNull(humanResult)
+        assertTrue("Direct human mouth proximity must yield elevated sub-bass ratio (>0.15)", humanResult!!.subBassProximityRatio > 0.15f)
+    }
+
+    @Test
     fun testEmptyOrSilentChunkHandledSafely() {
         val detector = AcousticSyntheticDetector()
         val silentChunk = FloatArray(1024) { 0f }

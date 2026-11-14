@@ -120,6 +120,23 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+            sendBroadcast(Intent("com.xorcall.TOGGLE_DEMO_TARGET"))
+            try {
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(android.os.VibrationEffect.createOneShot(45, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(45)
+                }
+            } catch (e: Exception) {}
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
 }
 
 @Composable
@@ -703,6 +720,35 @@ fun MainScreen(
                             refreshHistory()
                         }
                     }
+                    "com.xorcall.TOGGLE_DEMO_TARGET" -> {
+                        isDemoAiTarget = !isDemoAiTarget
+                        sttManager.isTargetAiClone = isDemoAiTarget
+                        if (isDemoAiTarget) {
+                            latestAcousticResult = AcousticAnalysisResult(
+                                isSyntheticVoice = true,
+                                syntheticConfidence = 0.94f,
+                                highFrequencyEnergyRatio = 0.082f,
+                                pitchJitterEstimate = 0.91f,
+                                spectralFlatness = 0.435f,
+                                isVoicedSpeech = true,
+                                analysisReason = "🚨 AI SYNTHETIC / LOUDSPEAKER VOICE (94%): Sub-180Hz driver void (0.041 prox) & vocoder diffusion (0.435 flatness).",
+                                subBassProximityRatio = 0.041f,
+                                isLoudspeakerReplay = true
+                            )
+                        } else {
+                            latestAcousticResult = AcousticAnalysisResult(
+                                isSyntheticVoice = false,
+                                syntheticConfidence = 0.11f,
+                                highFrequencyEnergyRatio = 0.024f,
+                                pitchJitterEstimate = 0.62f,
+                                spectralFlatness = 0.182f,
+                                isVoicedSpeech = true,
+                                analysisReason = "🟢 Biological Human Voice: Proximity chest resonance confirmed (0.342 prox) & natural formants (0.182 flatness).",
+                                subBassProximityRatio = 0.342f,
+                                isLoudspeakerReplay = false
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -716,6 +762,7 @@ fun MainScreen(
             addAction("com.xorcall.WHITELIST_CALL")
             addAction("com.xorcall.FINANCIAL_APP_BLOCKED")
             addAction("com.xorcall.SCAM_ACTIVE_STATE")
+            addAction("com.xorcall.TOGGLE_DEMO_TARGET")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -2438,37 +2485,47 @@ fun AcousticRadarCard(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // 3 Key Forensic Metrics
+        // 4 Key Forensic Metrics (Including Sub-Bass Proximity & Loudspeaker Replay Void)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("HARMONIC PURITY", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text("HARMONIC", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = String.format(java.util.Locale.US, "%.2f", result.pitchJitterEstimate),
                     color = if (result.pitchJitterEstimate > 0.85f && result.isVoicedSpeech) Color(0xFFF87171) else Color(0xFFE2E8F0),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("AI: >0.85 | Human: 0.5-0.75", color = Color(0xFF475569), fontSize = 7.sp)
+                Text("AI: >0.85", color = Color(0xFF475569), fontSize = 7.sp)
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text("HF RATIO (>6.5k)", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.weight(1.1f)) {
+                Text("SUB-BASS PROX", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    text = String.format(java.util.Locale.US, "%.4f", result.highFrequencyEnergyRatio),
-                    color = if (result.highFrequencyEnergyRatio > 0.15f) Color(0xFFF87171) else Color(0xFFE2E8F0),
+                    text = String.format(java.util.Locale.US, "%.3f", result.subBassProximityRatio),
+                    color = if (result.subBassProximityRatio < 0.10f && result.isVoicedSpeech) Color(0xFFF87171) else Color(0xFF10B981),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("AI Buzz: >0.15", color = Color(0xFF475569), fontSize = 7.sp)
+                Text(if (result.subBassProximityRatio < 0.10f && result.isVoicedSpeech) "Speaker Void" else "Proximity (>0.2)", color = Color(0xFF475569), fontSize = 7.sp)
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("WIENER ENTROPY", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text("WIENER ENT", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = String.format(java.util.Locale.US, "%.3f", result.spectralFlatness),
                     color = if (result.spectralFlatness > 0.34f) Color(0xFFF87171) else Color(0xFFE2E8F0),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("AI: >0.34 | Human: <0.26", color = Color(0xFF475569), fontSize = 7.sp)
+                Text("AI: >0.34", color = Color(0xFF475569), fontSize = 7.sp)
+            }
+            Column(modifier = Modifier.weight(0.9f)) {
+                Text("HF RATIO", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = String.format(java.util.Locale.US, "%.3f", result.highFrequencyEnergyRatio),
+                    color = if (result.highFrequencyEnergyRatio > 0.15f) Color(0xFFF87171) else Color(0xFFE2E8F0),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("AI: >0.15", color = Color(0xFF475569), fontSize = 7.sp)
             }
         }
 

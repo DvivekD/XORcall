@@ -43,3 +43,25 @@ def test_cloud_stt_short_audio_rejection():
     res = stt.transcribe_pcm(pcm)
     assert res["transcript"] == ""
     assert "Audio chunk too short" in res.get("error", "")
+
+def test_remote_demo_trigger_endpoint():
+    from fastapi.testclient import TestClient
+    from main import app
+    client = TestClient(app)
+    
+    # 1. Trigger AI
+    r1 = client.get("/api/v1/demo/trigger?mode=ai")
+    assert r1.status_code == 200
+    assert r1.json()["active_mode"] == "ai"
+    assert r1.json()["is_synthetic"] is True
+
+    # 2. Check state
+    r2 = client.get("/api/v1/demo/state")
+    assert r2.status_code == 200
+    assert r2.json()["active_mode"] == "ai"
+
+    # 3. Toggle back to human
+    r3 = client.get("/api/v1/demo/trigger?mode=toggle")
+    assert r3.status_code == 200
+    assert r3.json()["active_mode"] == "human"
+    assert r3.json()["is_synthetic"] is False

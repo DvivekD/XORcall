@@ -77,16 +77,26 @@ class VoiceForensicsEngine:
         low_energy = np.sum(magnitude[low_freq_mask] ** 2) + 1e-9
         high_low_ratio = high_energy / low_energy
 
-        # 3. Spectral Flatness & Phase Variance
+        # 3. Sub-Bass Proximity vs Loudspeaker Driver Air-Gap (<180 Hz)
+        # Human mouth near handset produces rich chest resonance (75-175Hz).
+        # Small laptop/phone speaker drivers (<40mm) physically roll off below 180Hz.
+        sub_bass_mask = (freqs >= 75) & (freqs <= 175)
+        mid_freq_mask = (freqs >= 300) & (freqs <= 1500)
+        sub_bass_energy = np.sum(magnitude[sub_bass_mask] ** 2) + 1e-12
+        mid_energy = np.sum(magnitude[mid_freq_mask] ** 2) + 1e-12
+        sub_bass_ratio = float(sub_bass_energy / mid_energy)
+        speaker_void_score = 0.85 if sub_bass_ratio < 0.10 else (0.05 if sub_bass_ratio > 0.22 else 0.20)
+
+        # 4. Spectral Flatness & Phase Variance
         # Synthetic speech exhibits unnaturally uniform spectral energy distribution in certain bands
         geo_mean = np.exp(np.mean(np.log(magnitude + 1e-12)))
         arith_mean = np.mean(magnitude)
         spectral_flatness = float(geo_mean / (arith_mean + 1e-12))
 
-        # 4. Root Mean Square (RMS) & Dynamic Range
+        # 5. Root Mean Square (RMS) & Dynamic Range
         rms = float(np.sqrt(np.mean(audio ** 2)))
 
-        # 5. Pitch Jitter Analysis
+        # 6. Pitch Jitter Analysis
         jitter_res = self.estimate_pitch_jitter(audio)
         jitter_pct = jitter_res["jitter_pct"]
 
@@ -100,12 +110,17 @@ class VoiceForensicsEngine:
         # Feature 3: Pitch Micro-Jitter (when sustained voiced vowel is present)
         jitter_score = 0.90 if (jitter_res["is_voiced"] and jitter_pct < 0.25) else (0.60 if (jitter_res["is_voiced"] and jitter_pct < 0.35) else 0.20)
 
-        composite_voice_score = round(0.45 * flatness_score + 0.35 * cutoff_score + 0.20 * jitter_score, 2)
-        is_synthetic = composite_voice_score >= 0.52
+        composite_voice_score = round(0.35 * flatness_score + 0.25 * cutoff_score + 0.25 * speaker_void_score + 0.15 * jitter_score, 2)
+        if sub_bass_ratio > 0.22 and spectral_flatness < 0.28:
+            composite_voice_score = min(composite_voice_score, 0.18)
+
+        is_synthetic = composite_voice_score >= 0.50
 
         indicators = []
         if flatness_score >= 0.70:
             indicators.append(f"Unnatural acoustic spectral entropy: elevated Wiener entropy ({round(spectral_flatness, 3)})")
+        if speaker_void_score >= 0.70:
+            indicators.append(f"Sub-180Hz acoustic driver void: loudspeaker replay signature ({round(sub_bass_ratio, 3)})")
         if cutoff_score >= 0.70:
             indicators.append(f"Vocoder high-frequency spectral phase cutoff/shelf ({round(high_low_ratio, 4)})")
         if jitter_score >= 0.70:
@@ -116,6 +131,7 @@ class VoiceForensicsEngine:
             "voice_clone_score": composite_voice_score,
             "rms_energy": round(rms, 4),
             "high_low_ratio": round(float(high_low_ratio), 5),
+            "sub_bass_proximity_ratio": round(sub_bass_ratio, 4),
             "spectral_flatness": round(spectral_flatness, 4),
             "pitch_jitter_pct": jitter_pct,
             "detected_anomalies": indicators,

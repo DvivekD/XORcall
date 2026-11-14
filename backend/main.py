@@ -224,6 +224,42 @@ def download_dossier(session_id: str):
         headers={"Content-Disposition": f"attachment; filename=XORcall_1930_FIR_{session_id}.pdf"}
     )
 
+# ---------------- REMOTE DEMO TRIGGER ENDPOINTS ----------------
+demo_state = {
+    "mode": "human",
+    "updated_at": 0.0
+}
+
+@app.get("/api/v1/demo/trigger")
+@app.post("/api/v1/demo/trigger")
+def trigger_demo_mode(mode: str = "toggle"):
+    """
+    Remote webhook endpoint for stage demos.
+    Can be triggered via iOS Shortcuts, Back Tap, or any browser request.
+    Supports ?mode=ai, ?mode=human, or ?mode=toggle.
+    """
+    import time
+    global demo_state
+    if mode == "toggle":
+        demo_state["mode"] = "ai" if demo_state["mode"] == "human" else "human"
+    elif mode in ("ai", "human"):
+        demo_state["mode"] = mode
+    demo_state["updated_at"] = time.time()
+    return {
+        "status": "success",
+        "active_mode": demo_state["mode"],
+        "is_synthetic": demo_state["mode"] == "ai",
+        "updated_at": demo_state["updated_at"]
+    }
+
+@app.get("/api/v1/demo/state")
+def get_demo_mode_state():
+    return {
+        "active_mode": demo_state["mode"],
+        "is_synthetic": demo_state["mode"] == "ai",
+        "updated_at": demo_state["updated_at"]
+    }
+
 # ---------------- WEBSOCKET STREAMING ----------------
 
 class ConnectionManager:

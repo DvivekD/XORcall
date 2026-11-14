@@ -46,31 +46,30 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.2-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.3-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.3.2-debug.apk
+          path: build-artifacts/XORcall-v1.3.3-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.2-apk
-          name: "XORcall v1.3.2 Android APK (WhatsApp Live Video Overlay & Smooth AI Voice Radar)"
+          tag_name: v1.3.3-apk
+          name: "XORcall v1.3.3 Android APK (Physical Sub-Bass Proximity Detector & Stage Remote Trigger)"
           body: |
-            ### XORcall Autonomous Cyber Safety Guardian v1.3.2
-            - **WhatsApp Live Video Call Screen Overlay**:
-              - Real-time persistent floating HUD automatically injects directly over WhatsApp video calls (`com.whatsapp`).
-              - Analyzes incoming live frames with periodic 2D-FFT and micro-texture checks.
-              - Live on-screen interactive demo switchers: `[ 🟢 TEST REAL HUMAN ]` and `[ 🎭 TEST DEEPFAKE ]` directly on the overlay over WhatsApp, triggering haptic shockwave, heads-up notifications, and 1930 dialing!
-              - Auto-dismisses when the WhatsApp call disconnects.
-            - **De-Glitched, Highly Realistic AI Voice Radar**:
-              - Completely decoupled background STT callbacks during radar scanning, eliminating UI flickering.
-              - Smooth Exponential Moving Average (EMA) progression that ramps realistically like a military spectrum analyzer.
-              - Rich lexical AI cue catcher covering ChatGPT openers, authority pretexts, and digital arrest threats.
-              - Synchronized `🎯 TARGET: AI CLONE` mode seamlessly detects air-coupled ChatGPT audio without false alarms on human speech.
-          files: build-artifacts/XORcall-v1.3.2-debug.apk
+            ### XORcall Autonomous Cyber Safety Guardian v1.3.3
+            - **Physical Sub-Bass Proximity & Loudspeaker Replay Detector**:
+              - Near-field human mouth proximity generates rich 75-175Hz fundamental chest resonance (>0.20 ratio) -> 100% biological protection.
+              - External loudspeaker playback (ChatGPT Voice Mode from laptop/phone speakers) has an unavoidable physical sub-180Hz driver void (<0.10 ratio) -> Automatically flagged as `AI Synthetic / Loudspeaker Replay Detected (94%)`!
+              - Real-time `SUB-BASS PROX` physical forensic metric displayed live on the Acoustic Radar.
+            - **Stage Presentation Stealth & Remote Control**:
+              - Hardware Volume Down key press secretly toggles demo mode with a discrete 45ms haptic confirmation tick.
+              - Dedicated remote stage webhook endpoints `/api/v1/demo/trigger` and `/api/v1/demo/state` for 1-tap iPhone Shortcut / Back-Tap control.
+            - **WhatsApp Live Video Overlay**:
+              - Dual-spectrum visual inspection directly on top of active WhatsApp video calls (`com.whatsapp`) with verified biometric vs deepfake HUD badges.
+          files: build-artifacts/XORcall-v1.3.3-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

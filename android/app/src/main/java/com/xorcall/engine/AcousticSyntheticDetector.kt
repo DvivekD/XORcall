@@ -9,7 +9,9 @@ data class AcousticAnalysisResult(
     val pitchJitterEstimate: Float,
     val spectralFlatness: Float = 0f,
     val isVoicedSpeech: Boolean = false,
-    val analysisReason: String
+    val analysisReason: String,
+    val subBassProximityRatio: Float = 0.25f,
+    val isLoudspeakerReplay: Boolean = false
 )
 
 /**
@@ -49,6 +51,7 @@ class AcousticSyntheticDetector {
     private var smoothedFlatness: Float = 0.20f
     private var smoothedMaxCorr: Float = 0.50f
     private var smoothedSyntheticConfidence: Float = 0.05f
+    private var smoothedSubBassRatio: Float = 0.25f
 
     @Volatile
     var isTargetAiClone: Boolean = false
@@ -75,7 +78,9 @@ class AcousticSyntheticDetector {
                     pitchJitterEstimate = smoothedMaxCorr,
                     spectralFlatness = smoothedFlatness,
                     isVoicedSpeech = false,
-                    analysisReason = "Awaiting active voice utterance..."
+                    analysisReason = "Awaiting active voice utterance...",
+                    subBassProximityRatio = smoothedSubBassRatio,
+                    isLoudspeakerReplay = false
                 )
             }
 
@@ -88,7 +93,7 @@ class AcousticSyntheticDetector {
             if (rms < MIN_SPEECH_RMS) {
                 // Natural conversational pause between words — decay very gently so pauses don't reset detection
                 smoothedSyntheticConfidence *= 0.95f
-                val isSynth = smoothedSyntheticConfidence >= 0.72f && analyzedVoicedFrames >= 5 && smoothedFlatness >= 0.32f
+                val isSynth = smoothedSyntheticConfidence >= 0.70f && analyzedVoicedFrames >= 4 && smoothedFlatness >= 0.30f
                 return AcousticAnalysisResult(
                     isSyntheticVoice = isSynth,
                     syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
@@ -100,7 +105,9 @@ class AcousticSyntheticDetector {
                         "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Artificial neural vocoder identified."
                     } else {
                         "Awaiting active voice utterance..."
-                    }
+                    },
+                    subBassProximityRatio = smoothedSubBassRatio,
+                    isLoudspeakerReplay = false
                 )
             }
 
@@ -124,10 +131,12 @@ class AcousticSyntheticDetector {
             }
             computeFFT(fftBufferReal, fftBufferImag)
 
-            // 4. Compute Power Spectrum & Wiener Entropy (Spectral Flatness)
+            // 4. Compute Power Spectrum & Wiener Entropy (Spectral Flatness) + Sub-Bass Proximity
             val halfSize = FFT_SIZE / 2
             val binResolution = SAMPLE_RATE / FFT_SIZE // 15.625 Hz per bin
 
+            var subBassEnergy = 0.0
+            var midBandEnergy = 0.0
             var lowBandEnergy = 0.0
             var highBandEnergy = 0.0
             var logSum = 0.0
@@ -138,6 +147,12 @@ class AcousticSyntheticDetector {
                 val magSq = fftBufferReal[k] * fftBufferReal[k] + fftBufferImag[k] * fftBufferImag[k]
                 val freq = k * binResolution
 
+                if (freq in 75f..175f) {
+                    subBassEnergy += magSq
+                } else if (freq in 300f..1500f) {
+                    midBandEnergy += magSq
+                }
+
                 if (freq in 300f..6500f) {
                     lowBandEnergy += magSq
                     logSum += ln(magSq + 1e-12)
@@ -146,6 +161,12 @@ class AcousticSyntheticDetector {
                 } else if (freq >= 6500f) {
                     highBandEnergy += magSq
                 }
+            }
+
+            val subBassRatio = if (midBandEnergy > 1e-8) {
+                (subBassEnergy / midBandEnergy).toFloat().coerceIn(0.001f, 1.5f)
+            } else {
+                0.25f
             }
 
             val hfRatio = if (lowBandEnergy > 1e-8) {
@@ -218,11 +239,10 @@ class AcousticSyntheticDetector {
             smoothedHfRatio = (1 - alpha) * smoothedHfRatio + alpha * hfRatio
             smoothedFlatness = (1 - alpha) * smoothedFlatness + alpha * spectralFlatness
             smoothedMaxCorr = (1 - alpha) * smoothedMaxCorr + alpha * maxCorr
+            smoothedSubBassRatio = (1 - alpha) * smoothedSubBassRatio + alpha * subBassRatio
 
-            // 7. Multi-Feature Scientific AI Voice Clone Scoring Model
+            // 7. Multi-Feature Scientific AI Voice Clone & Loudspeaker Air-Gap Scoring Model
             // Feature 1: Wiener Entropy (Inter-harmonic diffusion noise floor)
-            // Biological vocal tracts produce deep formant troughs between formants: flatness < 0.26
-            // Neural vocoders introduce elevated inter-harmonic diffusion noise: flatness > 0.34
             val flatnessScore = when {
                 smoothedFlatness > 0.40f -> 0.95f // Severe neural diffusion floor
                 smoothedFlatness > 0.34f -> 0.75f // Elevated vocoder inter-harmonic signature
@@ -231,8 +251,6 @@ class AcousticSyntheticDetector {
             }
 
             // Feature 2: Harmonic Periodicity Peak (Autocorrelation wave purity during vowels)
-            // Biological human vowels have natural correlation 0.50 - 0.75
-            // Neural vocoders with mathematical phase-locking reach > 0.86
             val periodicityScore = when {
                 smoothedMaxCorr > 0.86f -> 0.85f // Unnatural mathematical wave locking
                 smoothedMaxCorr > 0.76f -> 0.45f // Moderately high periodicity
@@ -240,15 +258,27 @@ class AcousticSyntheticDetector {
                 else -> 0.20f
             }
 
-            // Feature 3: High-Frequency Vocoder Phase Shelf / Cutoff (>6.5 kHz)
-            // Neural vocoders often show abnormal high-frequency buzz or phase shelving
+            // Feature 3: Sub-Bass Proximity vs Loudspeaker Driver Air-Gap (<180 Hz)
+            // Real human speaking directly into handset generates rich 80-160Hz chest proximity (ratio > 0.20).
+            // Laptop/external speakers physically cannot radiate sub-180Hz acoustic power (ratio < 0.10).
+            val isSpeakerVoid = isVoiced && smoothedSubBassRatio < 0.10f
+            val isHumanProximity = isVoiced && smoothedSubBassRatio >= 0.20f
+
+            val speakerAirGapScore = when {
+                isSpeakerVoid -> 0.88f // Tiny speaker driver cutoff (laptop / phone speaker replay)
+                smoothedSubBassRatio < 0.15f && isVoiced -> 0.65f
+                isHumanProximity -> 0.02f // Authentic human chest proximity
+                else -> 0.15f
+            }
+
+            // Feature 4: High-Frequency Vocoder Phase Shelf / Cutoff (>6.5 kHz)
             val hfScore = when {
                 smoothedHfRatio > 0.16f -> 0.75f  // Abnormal high-frequency buzz/fizz
                 smoothedHfRatio < 0.003f && smoothedFlatness > 0.32f -> 0.65f // Steep vocoder cutoff combined with diffusion
                 else -> 0.10f
             }
 
-            // Feature 4: Pitch Stability during Voiced Frames
+            // Feature 5: Pitch Stability during Voiced Frames
             val pitchStabilityScore = if (isVoiced && lastVoicedLag > 0 && abs(bestLag - lastVoicedLag) == 0 && analyzedVoicedFrames >= 6 && smoothedMaxCorr > 0.80f) {
                 0.75f // Mathematical pitch invariance
             } else if (isVoiced && lastVoicedLag > 0 && abs(bestLag - lastVoicedLag) <= 1) {
@@ -260,11 +290,13 @@ class AcousticSyntheticDetector {
                 lastVoicedLag = bestLag
             }
 
-            // Weighted multi-feature fusion
-            var instantConfidence = 0.45f * flatnessScore + 0.30f * periodicityScore + 0.15f * hfScore + 0.10f * pitchStabilityScore
+            // Weighted multi-feature fusion: Wiener Entropy + Periodicity + Speaker Driver Void + HF Buzz
+            var instantConfidence = 0.35f * flatnessScore + 0.25f * periodicityScore + 0.25f * speakerAirGapScore + 0.10f * hfScore + 0.05f * pitchStabilityScore
 
-            // Biological Formant Veto: If vocal tract shows deep biological formants, synthetic confidence is capped
-            if (smoothedFlatness < 0.26f && !isTargetAiClone) {
+            // Biological Formant & Proximity Veto:
+            if (isHumanProximity && smoothedFlatness < 0.28f && !isTargetAiClone) {
+                instantConfidence = instantConfidence.coerceAtMost(0.12f)
+            } else if (smoothedFlatness < 0.26f && !isTargetAiClone && !isSpeakerVoid) {
                 instantConfidence = instantConfidence.coerceAtMost(0.15f)
             }
 
@@ -276,13 +308,15 @@ class AcousticSyntheticDetector {
 
             smoothedSyntheticConfidence = (1 - alpha) * smoothedSyntheticConfidence + alpha * instantConfidence
 
-            // 8. Decision Trigger: Requires sustained neural vocoder signatures across >= 5 voiced frames
-            val isSynthetic = (smoothedSyntheticConfidence >= 0.72f && analyzedVoicedFrames >= 5 && smoothedFlatness >= 0.32f)
+            // 8. Decision Trigger: Requires sustained neural vocoder or loudspeaker air-gap signatures
+            val isSynthetic = (smoothedSyntheticConfidence >= 0.70f && analyzedVoicedFrames >= 4) ||
+                    (isSpeakerVoid && smoothedFlatness >= 0.28f && analyzedVoicedFrames >= 4)
 
             val reason = when {
-                isSynthetic -> "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Neural vocoder diffusion (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness) & mathematical wave locking (${String.format(java.util.Locale.US, "%.2f", smoothedMaxCorr)} corr)."
-                smoothedSyntheticConfidence > 0.45f -> "Analyzing voice harmonics: Neural vocoder characteristics observed (${(smoothedSyntheticConfidence * 100).toInt()}%)."
-                isVoiced -> "🟢 Biological Human Voice: Natural vocal tract formant troughs (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness) & biological airflow confirmed."
+                isSynthetic -> "🚨 AI SYNTHETIC / LOUDSPEAKER VOICE (${(smoothedSyntheticConfidence * 100).toInt()}%): Sub-180Hz driver void (${String.format(java.util.Locale.US, "%.3f", smoothedSubBassRatio)} prox) & vocoder diffusion (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness)."
+                smoothedSyntheticConfidence > 0.45f -> "Analyzing voice harmonics: Loudspeaker air-gap and vocoder characteristics observed (${(smoothedSyntheticConfidence * 100).toInt()}%)."
+                isVoiced && isHumanProximity -> "🟢 Biological Human Voice: Proximity chest resonance confirmed (${String.format(java.util.Locale.US, "%.3f", smoothedSubBassRatio)} prox) & natural formants (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness)."
+                isVoiced -> "🟢 Biological Human Voice: Natural vocal tract formant troughs (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness)."
                 else -> "Spoken acoustic stream nominal."
             }
 
@@ -290,10 +324,12 @@ class AcousticSyntheticDetector {
                 isSyntheticVoice = isSynthetic,
                 syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
                 highFrequencyEnergyRatio = smoothedHfRatio,
-                pitchJitterEstimate = smoothedMaxCorr, // displays correlation peak
+                pitchJitterEstimate = smoothedMaxCorr,
                 spectralFlatness = smoothedFlatness,
                 isVoicedSpeech = isVoiced,
-                analysisReason = reason
+                analysisReason = reason,
+                subBassProximityRatio = smoothedSubBassRatio,
+                isLoudspeakerReplay = isSpeakerVoid
             )
         } catch (e: Throwable) {
             return AcousticAnalysisResult(
@@ -303,7 +339,9 @@ class AcousticSyntheticDetector {
                 pitchJitterEstimate = smoothedMaxCorr,
                 spectralFlatness = smoothedFlatness,
                 isVoicedSpeech = false,
-                analysisReason = "Spoken acoustic stream nominal."
+                analysisReason = "Spoken acoustic stream nominal.",
+                subBassProximityRatio = smoothedSubBassRatio,
+                isLoudspeakerReplay = false
             )
         }
     }
