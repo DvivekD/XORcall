@@ -46,8 +46,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.xorcall.engine.*
 import com.xorcall.service.CallMonitorService
+import com.xorcall.service.PackageWatchdog
 import com.xorcall.service.XORcallAccessibilityService
 import com.xorcall.ui.FloatingAlertOverlay
+import com.xorcall.ui.LockdownActivity
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -171,9 +173,16 @@ fun MainScreen(
     var isBannerEnabled by remember { mutableStateOf(settingsManager.isBannerEnabled) }
     var isWhitelistContactsEnabled by remember { mutableStateOf(settingsManager.isWhitelistContactsEnabled) }
     var isAutoAllowBanksEnabled by remember { mutableStateOf(settingsManager.isAutoAllowBanksEnabled) }
+    var isAppLockdownEnabled by remember { mutableStateOf(settingsManager.isAppLockdownEnabled) }
     var isAiVoiceDetectionArmed by remember { mutableStateOf(settingsManager.isAiVoiceDetectionArmed) }
     var isAutoSpeakerphoneEnabled by remember { mutableStateOf(settingsManager.isAutoSpeakerphoneEnabled) }
     var isAccessibilityActive by remember { mutableStateOf(XORcallAccessibilityService.isServiceRunning) }
+    val whitelistedContactsList = remember { mutableStateListOf<WhitelistedContact>() }
+
+    fun refreshWhitelisted() {
+        whitelistedContactsList.clear()
+        whitelistedContactsList.addAll(ContactWhitelistSyncManager.syncWhitelistedContacts(context))
+    }
     var groqApiKey by remember { mutableStateOf(settingsManager.groqApiKey) }
     var showGroqKeyDialog by remember { mutableStateOf(false) }
     var groqKeyInput by remember { mutableStateOf(settingsManager.groqApiKey) }
@@ -204,6 +213,47 @@ fun MainScreen(
     var liveAudioSource by remember { mutableStateOf("Standby") }
     var voskErrorMessage by remember { mutableStateOf(sttManager.errorMessage) }
 
+    // VIDEO CALL DEEPFAKE INSPECTION ENGINE & HUD STATE
+    val videoDetector = remember { VideoDeepfakeDetector() }
+    var latestVideoResult by remember { mutableStateOf<VideoInspectionResult?>(null) }
+    var activeVideoFeedMode by remember { mutableStateOf<String?>("HUMAN") }
+
+    fun testNormalVideoFeed() {
+        val result = videoDetector.verifyAuthenticHuman()
+        latestVideoResult = result
+        activeVideoFeedMode = "HUMAN"
+        riskLevel = RiskLevel.SAFE
+        lastThreatMessage = null
+        if (isBannerEnabled) {
+            floatingOverlay.showVideoDeepfakeHUD(result.hudBadge, isSynthetic = false)
+        }
+        Toast.makeText(context, "🟢 Biometric Identity Verified: Authentic Human Webcam", Toast.LENGTH_SHORT).show()
+    }
+
+    fun testDeepfakeVideoFeed() {
+        val result = videoDetector.suspectSyntheticFace()
+        latestVideoResult = result
+        activeVideoFeedMode = "DEEPFAKE"
+        riskLevel = RiskLevel.CRITICAL
+        lastThreatMessage = result.hudBadge
+
+        if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
+        if (isBannerEnabled) floatingOverlay.showVideoDeepfakeHUD(result.hudBadge, isSynthetic = true)
+        if (isAudioWhisperEnabled) whisperEngine.speakWarning("Warning: Video deepfake detected! Facial boundary warping and 2D-FFT high frequency synthetic grid identified.")
+        if (isFamilyPingEnabled) guardianPingManager.sendSilentGuardianPing("+91 98450 71289", result.hudBadge, DemographicVector.ALL)
+        historyManager.recordCall(
+            "+91 98450 71289",
+            "VIDEO_DEEPFAKE_FACE_SWAP",
+            DemographicVector.ALL,
+            RiskLevel.CRITICAL,
+            true,
+            0.96f,
+            listOf("VIDEO_DEEPFAKE", "FACE_SWAP", "2D_FFT_LATTICE_ANOMALY", "BOUNDARY_WARPING"),
+            result.hudBadge
+        )
+        refreshHistory()
+    }
+
     DisposableEffect(sttManager) {
         sttManager.onModelReady = {
             coroutineScope.launch(Dispatchers.Main) {
@@ -225,6 +275,7 @@ fun MainScreen(
 
     LaunchedEffect(Unit) {
         refreshHistory()
+        refreshWhitelisted()
         sttManager.updateCloudConfig(settingsManager.groqApiKey, settingsManager.backendUrl)
         sttManager.initializeVosk(this)
     }
@@ -615,9 +666,24 @@ fun MainScreen(
                         }
                     }
                     "com.xorcall.WHITELIST_CALL" -> {
-                        val entity = intent.getStringExtra("entity") ?: "Trusted Contact"
+                        val entity = intent.getStringExtra("name") ?: intent.getStringExtra("entity") ?: "Trusted Contact"
                         val number = intent.getStringExtra("number") ?: ""
-                        liveTranscript = "🟢 Whitelist Call Passed: $entity ($number)"
+                        val rel = intent.getStringExtra("relationship") ?: "Family / Verified"
+                        liveTranscript = "🟢 Whitelist Call Passed: $entity ($rel, $number) · Threat alerts suppressed"
+                        riskLevel = RiskLevel.SAFE
+                        lastThreatMessage = null
+                        floatingOverlay.dismiss()
+                        refreshHistory()
+                    }
+                    "com.xorcall.FINANCIAL_APP_BLOCKED" -> {
+                        val appName = intent.getStringExtra("appName") ?: "Financial App"
+                        lastThreatMessage = "🚨 KAVACH APP LOCKDOWN: Blocked $appName to protect funds!"
+                    }
+                    "com.xorcall.SCAM_ACTIVE_STATE" -> {
+                        val active = intent.getBooleanExtra("isActive", false)
+                        if (!active) {
+                            refreshHistory()
+                        }
                     }
                 }
             }
@@ -630,6 +696,8 @@ fun MainScreen(
             addAction("com.xorcall.AI_VOICE_ALERT")
             addAction("com.xorcall.ACOUSTIC_UPDATE")
             addAction("com.xorcall.WHITELIST_CALL")
+            addAction("com.xorcall.FINANCIAL_APP_BLOCKED")
+            addAction("com.xorcall.SCAM_ACTIVE_STATE")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -757,7 +825,7 @@ fun MainScreen(
                 )
             }
 
-            // SMART CALL WHITELISTING & VERIFIED ENTITIES CARD
+            // SMART CALL WHITELISTING & FINANCIAL APP LOCKER CARD
             item {
                 SmartWhitelistingCard(
                     whitelistContacts = isWhitelistContactsEnabled,
@@ -770,6 +838,11 @@ fun MainScreen(
                         isAutoAllowBanksEnabled = it
                         settingsManager.isAutoAllowBanksEnabled = it
                     },
+                    appLockdown = isAppLockdownEnabled,
+                    onToggleAppLockdown = {
+                        isAppLockdownEnabled = it
+                        settingsManager.isAppLockdownEnabled = it
+                    },
                     aiVoiceArmed = isAiVoiceDetectionArmed,
                     onToggleAiVoice = {
                         isAiVoiceDetectionArmed = it
@@ -780,7 +853,23 @@ fun MainScreen(
                     onToggleAutoSpeakerphone = {
                         isAutoSpeakerphoneEnabled = it
                         settingsManager.isAutoSpeakerphoneEnabled = it
-                    }
+                    },
+                    whitelistedContacts = whitelistedContactsList,
+                    onSimulateWhitelistedCall = { contact ->
+                        ContactWhitelistSyncManager.handleWhitelistedCall(
+                            context = context,
+                            number = contact.number,
+                            contact = contact,
+                            historyManager = historyManager
+                        )
+                        liveTranscript = "🟢 Whitelist Call Passed: ${contact.name} (${contact.relationship}, ${contact.number}) · All scam alerts suppressed"
+                        riskLevel = RiskLevel.SAFE
+                        lastThreatMessage = null
+                        floatingOverlay.dismiss()
+                        refreshHistory()
+                        Toast.makeText(context, "🟢 Whitelist Verified: Call from ${contact.name} (${contact.relationship}) passed safely!", Toast.LENGTH_SHORT).show()
+                    },
+                    onRefreshWhitelist = { refreshWhitelisted() }
                 )
             }
 
@@ -802,6 +891,19 @@ fun MainScreen(
                     onToggleTarget = { isDemoAiTarget = !isDemoAiTarget },
                     onOpenCustomInjector = {
                         showCustomInjectorDialog = true
+                    },
+                    onTestAppLockdown = {
+                        XORcallAccessibilityService.setScamCallActive(true)
+                        PackageWatchdog.setScamCallActive(true)
+                        riskLevel = RiskLevel.CRITICAL
+                        lastThreatMessage = "🚨 CRITICAL: Extortion Scam Call Active! Sensitive payment apps frozen."
+                        LockdownActivity.launch(
+                            context = context,
+                            packageName = "com.phonepe.app",
+                            appName = "PhonePe UPI",
+                            reason = "Simulated attempt by coerced victim to open PhonePe during active Digital Arrest scam call."
+                        )
+                        Toast.makeText(context, "🚨 KAVACH LOCKDOWN: PhonePe access blocked during active scam call!", Toast.LENGTH_LONG).show()
                     },
                     onTriggerKidnap5Lakhs = {
                         triggerThreatExecution(
@@ -878,6 +980,29 @@ fun MainScreen(
                         lastThreatMessage = null
                         lastAiVoiceStatus = null
                         latestAcousticResult = null
+                        floatingOverlay.dismiss()
+                    }
+                )
+            }
+
+            // VIDEO CALL DEEPFAKE DETECTION & BIOMETRIC HUD CARD
+            item {
+                VideoCallDeepfakeTesterCard(
+                    result = latestVideoResult,
+                    activeMode = activeVideoFeedMode,
+                    onTestNormalVideo = { testNormalVideoFeed() },
+                    onTestDeepfakeVideo = { testDeepfakeVideoFeed() },
+                    onTriggerFloatingHUD = {
+                        val res = latestVideoResult ?: videoDetector.suspectSyntheticFace()
+                        latestVideoResult = res
+                        floatingOverlay.showVideoDeepfakeHUD(res.hudBadge, isSynthetic = res.isSynthetic)
+                        Toast.makeText(context, "🪟 Injected Video Call Floating HUD Overlay!", Toast.LENGTH_SHORT).show()
+                    },
+                    onReset = {
+                        latestVideoResult = null
+                        activeVideoFeedMode = null
+                        riskLevel = RiskLevel.SAFE
+                        lastThreatMessage = null
                         floatingOverlay.dismiss()
                     }
                 )
@@ -1202,10 +1327,15 @@ fun SmartWhitelistingCard(
     onToggleWhitelistContacts: (Boolean) -> Unit,
     allowOfficialBanks: Boolean,
     onToggleAllowOfficialBanks: (Boolean) -> Unit,
+    appLockdown: Boolean,
+    onToggleAppLockdown: (Boolean) -> Unit,
     aiVoiceArmed: Boolean,
     onToggleAiVoice: (Boolean) -> Unit,
     autoSpeakerphone: Boolean = true,
-    onToggleAutoSpeakerphone: (Boolean) -> Unit = {}
+    onToggleAutoSpeakerphone: (Boolean) -> Unit = {},
+    whitelistedContacts: List<WhitelistedContact> = emptyList(),
+    onSimulateWhitelistedCall: (WhitelistedContact) -> Unit = {},
+    onRefreshWhitelist: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -1215,28 +1345,158 @@ fun SmartWhitelistingCard(
             .border(1.dp, Color(0xFF1C2A4F), RoundedCornerShape(12.dp))
             .padding(14.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("🛡️", fontSize = 16.sp)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "SMART WHITELIST & CALL CLASSIFICATION",
-                color = Color(0xFF60A5FA),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🛡️", fontSize = 16.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "SMART WHITELIST & APP LOCKER",
+                    color = Color(0xFF60A5FA),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF065F46))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text("AUTO-IMMUNE", color = Color(0xFF6EE7B7), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            }
         }
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = "Mandatory audio monitoring on unknown calls. Bypasses trusted entities automatically.",
+            text = "Legitimate calls from trusted family (Mom, Dad, Starred) and official emergency lines (1930, 112) are immune to false alarms. Sensitive payment apps freeze automatically during extortion threats.",
             color = Color(0xFF94A3B8),
-            fontSize = 10.sp
+            fontSize = 10.sp,
+            lineHeight = 13.sp
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        InterventionRow("Whitelist Saved Contacts (Friends / Manager)", whitelistContacts, onToggleWhitelistContacts)
-        InterventionRow("Auto-Allow Verified Banks & Police (1800 SBI/HDFC, 112)", allowOfficialBanks, onToggleAllowOfficialBanks)
+        // Security Toggles
+        InterventionRow("Whitelist Saved Contacts & Kinship (Mom, Dad, Starred)", whitelistContacts, onToggleWhitelistContacts)
+        InterventionRow("Auto-Allow Official Banks & Helplines (1930, 112, 1800 SBI/HDFC)", allowOfficialBanks, onToggleAllowOfficialBanks)
+        InterventionRow("Automatic Financial App Lockdown (Freeze PhonePe/GPay during Scam)", appLockdown, onToggleAppLockdown)
         InterventionRow("Neural AI Voice Clone Decoding (FFT & Micro-Jitter)", aiVoiceArmed, onToggleAiVoice)
         InterventionRow("Auto-Speakerphone In-Call Capture (Loudspeaker Intercept)", autoSpeakerphone, onToggleAutoSpeakerphone)
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Divider(color = Color(0xFF1C2A4F), thickness = 0.5.dp)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Whitelisted Contacts Directory Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "DETECTED TRUSTED ENTITIES & HELPLINES",
+                    color = Color(0xFF38BDF8),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = "Tap any contact to simulate an incoming verified call",
+                    color = Color(0xFF64748B),
+                    fontSize = 8.sp
+                )
+            }
+            TextButton(
+                onClick = onRefreshWhitelist,
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text("Sync ↻", color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        val displayList = if (whitelistedContacts.isNotEmpty()) {
+            whitelistedContacts.take(6)
+        } else {
+            ContactWhitelistSyncManager.getPresetFamilyContacts().take(3) + 
+            ContactWhitelistSyncManager.getEmergencyContacts().take(2) + 
+            ContactWhitelistSyncManager.getBankContacts().take(1)
+        }
+
+        displayList.forEach { contact ->
+            WhitelistedContactRow(contact, onSimulate = { onSimulateWhitelistedCall(contact) })
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+}
+
+@Composable
+fun WhitelistedContactRow(
+    contact: WhitelistedContact,
+    onSimulate: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF070E20))
+            .border(0.5.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))
+            .clickable { onSimulate() }
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (contact.isOfficialBankOrEmergency) "🏛️" else "⭐",
+                fontSize = 13.sp
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = contact.name,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (contact.isOfficialBankOrEmergency) Color(0xFF1E3A8A) else Color(0xFF065F46))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = contact.relationship,
+                            color = if (contact.isOfficialBankOrEmergency) Color(0xFF93C5FD) else Color(0xFF6EE7B7),
+                            fontSize = 7.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Text(
+                    text = contact.number,
+                    color = Color(0xFF94A3B8),
+                    fontSize = 8.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+
+        Button(
+            onClick = onSimulate,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2B48)),
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            shape = RoundedCornerShape(4.dp)
+        ) {
+            Text("Simulate Call", fontSize = 8.sp, color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -1263,6 +1523,7 @@ fun DemographicThreatTesterCard(
     onTriggerProfessionalScam: () -> Unit,
     onTriggerAiCloneScam: () -> Unit,
     onTriggerHapticsOnly: () -> Unit,
+    onTestAppLockdown: () -> Unit = {},
     onReset: () -> Unit
 ) {
     Column(
@@ -1510,6 +1771,29 @@ fun DemographicThreatTesterCard(
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
             ) {
                 Text("Clear", fontSize = 9.sp, color = Color(0xFF94A3B8))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Mission-Critical Cyber Defense: Financial App Lockdown Demo
+        Button(
+            onClick = onTestAppLockdown,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🔒", fontSize = 14.sp)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "TEST FINANCIAL APP LOCKDOWN (Simulate opening PhonePe during Scam)",
+                    fontSize = 10.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
         }
     }
@@ -2148,6 +2432,415 @@ fun AcousticRadarCard(
             color = if (isSynthetic) Color(0xFFFCA5A5) else Color(0xFF94A3B8),
             fontSize = 9.sp,
             lineHeight = 12.sp
+        )
+    }
+}
+
+@Composable
+fun VideoCallDeepfakeTesterCard(
+    result: VideoInspectionResult?,
+    activeMode: String?,
+    onTestNormalVideo: () -> Unit,
+    onTestDeepfakeVideo: () -> Unit,
+    onTriggerFloatingHUD: () -> Unit,
+    onReset: () -> Unit
+) {
+    val isSynthetic = result?.isSynthetic == true
+    val cardBorderColor = when {
+        result == null -> Color(0xFF334155)
+        isSynthetic -> Color(0xFFEF4444)
+        else -> Color(0xFF10B981)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, cardBorderColor.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                .padding(14.dp)
+        ) {
+            // Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "📹 VIDEO CALL DEEPFAKE RADAR",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                // Status Badge
+                val badgeText = when {
+                    result == null -> "⚪ RADAR READY"
+                    isSynthetic -> "🚨 CRITICAL DEEPFAKE (${(result.deepfakeConfidence * 100).toInt()}%)"
+                    else -> "🟢 AUTHENTIC HUMAN (0.04)"
+                }
+                val badgeBg = when {
+                    result == null -> Color(0xFF1E293B)
+                    isSynthetic -> Color(0xFF7F1D1D)
+                    else -> Color(0xFF064E3B)
+                }
+                val badgeBorder = when {
+                    result == null -> Color(0xFF475569)
+                    isSynthetic -> Color(0xFFEF4444)
+                    else -> Color(0xFF10B981)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(badgeBg)
+                        .border(0.5.dp, badgeBorder, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = badgeText,
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Text(
+                text = "Real-time inspection of WhatsApp & video calls against AI deepfake face swaps, boundary seam warping, and 2D-FFT neural upscaler lattices.",
+                color = Color(0xFF94A3B8),
+                fontSize = 10.sp,
+                lineHeight = 13.sp,
+                modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+            )
+
+            // SIMULATED LIVE VIDEO FEED VIEWPORT CONTAINER
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF020617))
+                    .border(
+                        1.dp,
+                        if (isSynthetic) Color(0xFFEF4444).copy(alpha = 0.6f) else Color(0xFF10B981).copy(alpha = 0.6f),
+                        RoundedCornerShape(8.dp)
+                    )
+                    .padding(8.dp)
+            ) {
+                // Viewfinder Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopStart),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = if (isSynthetic) "🔴 VIRTUAL CAM: DEEPFACELIVE / SIMULATED AVATAR" else "🟢 OPTICAL CAM: WEBCAM 1080P (SONY SENSOR)",
+                        color = if (isSynthetic) Color(0xFFFCA5A5) else Color(0xFF6EE7B7),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "30 FPS • 2D-FFT ON",
+                        color = Color(0xFF64748B),
+                        fontSize = 8.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                // Center Face Reticle Simulation Box
+                Box(
+                    modifier = Modifier
+                        .size(110.dp, 80.dp)
+                        .align(Alignment.Center)
+                        .border(
+                            1.dp,
+                            if (isSynthetic) Color(0xFFEF4444) else Color(0xFF10B981),
+                            RoundedCornerShape(6.dp)
+                        )
+                        .padding(4.dp)
+                ) {
+                    Text(
+                        text = if (isSynthetic) "⚠️ SEAM WARPING\nCOLLAR BLUR\nGRID NOISE" else "BIOMETRIC LOCK\nHUMAN TEXTURE\nNATURAL BLINK",
+                        color = if (isSynthetic) Color(0xFFF87171) else Color(0xFF34D399),
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 10.sp,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
+                // Bottom HUD Badge Banner Overlay Inside Viewport
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (isSynthetic) Color(0xD97F1D1D) else Color(0xD9064E3B))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = result?.hudBadge ?: "🟢 VERIFIED BIOMETRIC IDENTITY: Authentic Human Video Feed (0.04 Anomaly Score)",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // INTERACTIVE TEST BUTTONS ROW
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Test A: Normal Video Feed
+                Button(
+                    onClick = onTestNormalVideo,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF064E3B)),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "📹 TEST NORMAL VIDEO",
+                            color = Color(0xFFA7F3D0),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "(Real Human / Daughter)",
+                            color = Color(0xFF6EE7B7),
+                            fontSize = 8.sp
+                        )
+                    }
+                }
+
+                // Test B: Deepfake Virtual Camera
+                Button(
+                    onClick = onTestDeepfakeVideo,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7F1D1D)),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "🎭 TEST DEEPFAKE CAM",
+                            color = Color(0xFFFECACA),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "(AI Face Swap Avatar)",
+                            color = Color(0xFFFCA5A5),
+                            fontSize = 8.sp
+                        )
+                    }
+                }
+            }
+
+            // DETAILED FORENSIC INSPECTION METRICS (Displayed when test is executed)
+            if (result != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF020617))
+                        .border(0.5.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Text(
+                        text = "🔬 LIVE FORENSIC TELEMETRY METRICS",
+                        color = Color(0xFFA5B4FC),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Metric 1: Azimuthal Grid Lattice Anomaly
+                    MetricBarRow(
+                        title = "Azimuthal Grid Lattice Anomaly",
+                        value = result.azimuthalLatticeAnomaly,
+                        scoreText = String.format(java.util.Locale.US, "%.2f", result.azimuthalLatticeAnomaly),
+                        subtitle = "2D-FFT azimuthal high-frequency lattice noise (GAN upscaler artifacts)",
+                        isAlarm = result.azimuthalLatticeAnomaly > 0.40f
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Metric 2: Facial Boundary Blur / Warping
+                    MetricBarRow(
+                        title = "Facial Boundary Blur / Warping",
+                        value = result.boundaryBlurWarping,
+                        scoreText = String.format(java.util.Locale.US, "%.2f", result.boundaryBlurWarping),
+                        subtitle = "Jawline/collar color grading seam and edge feathering discontinuity",
+                        isAlarm = result.boundaryBlurWarping > 0.40f
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Metric 3: Eye Blink Periodicity
+                    MetricBarRow(
+                        title = "Eye Blink Periodicity",
+                        value = result.blinkPeriodicityAnomaly,
+                        scoreText = String.format(java.util.Locale.US, "%.2f", result.blinkPeriodicityAnomaly),
+                        subtitle = "Ocular interval variance & saccadic micro-movements (Poisson vs frozen)",
+                        isAlarm = result.blinkPeriodicityAnomaly > 0.40f
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Metric 4: Biometric Authenticity Score
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Biometric Authenticity Score",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Inverse anomaly probability based on multi-spectral sensor fusion",
+                                color = Color(0xFF64748B),
+                                fontSize = 8.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isSynthetic) Color(0xFF7F1D1D) else Color(0xFF064E3B))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "${(result.biometricAuthenticityScore * 100).toInt()}% ${if (isSynthetic) "SYNTHETIC" else "AUTHENTIC"}",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Detected Anomalies Checklist
+                    if (result.detectedAnomalies.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Identified Synthetic Generative Signatures:",
+                            color = Color(0xFFF87171),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        result.detectedAnomalies.forEach { anomaly ->
+                            Text(
+                                text = "• $anomaly",
+                                color = Color(0xFFFCA5A5),
+                                fontSize = 8.sp,
+                                lineHeight = 11.sp,
+                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Action Toolbar (Floating HUD injection & Reset)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onTriggerFloatingHUD,
+                    shape = RoundedCornerShape(6.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFA5B4FC)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "🪟 INJECT FLOATING VIDEO HUD",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                TextButton(
+                    onClick = onReset,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "RESET RADAR",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MetricBarRow(
+    title: String,
+    value: Float,
+    scoreText: String,
+    subtitle: String,
+    isAlarm: Boolean
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = scoreText,
+                color = if (isAlarm) Color(0xFFEF4444) else Color(0xFF10B981),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Text(
+            text = subtitle,
+            color = Color(0xFF64748B),
+            fontSize = 7.sp,
+            lineHeight = 9.sp
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        LinearProgressIndicator(
+            progress = { value.coerceIn(0f, 1f) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp)),
+            color = if (isAlarm) Color(0xFFEF4444) else Color(0xFF10B981),
+            trackColor = Color(0xFF1E293B)
         )
     }
 }

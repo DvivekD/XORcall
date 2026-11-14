@@ -63,11 +63,13 @@ class CallMonitorService : Service(), TelemetryListener {
     private lateinit var packageWatchdog: PackageWatchdog
     private lateinit var callHistoryManager: CallHistoryManager
     private lateinit var audioManager: AudioManager
+    val videoDeepfakeDetector = VideoDeepfakeDetector()
     private var webSocketClient: TelemetryWebSocketClient? = null
 
     private var currentCallerNumber: String = "Unknown Caller"
     private var currentCallerClassification: String = "UNKNOWN"
     private var isCallActive: Boolean = false
+    private var isCurrentCallWhitelisted: Boolean = false
     private var currentAudioSourceName: String = "STANDBY"
 
     private var audioRecord: AudioRecord? = null
@@ -242,11 +244,30 @@ class CallMonitorService : Service(), TelemetryListener {
     private var lastThreatAlertTime = 0L
 
     private fun handleThreatDetected(analysis: ThreatAnalysis, transcript: String) {
+        if (isCurrentCallWhitelisted && settingsManager.isWhitelistContactsEnabled) {
+            Log.i(TAG, "🟢 Threat alert SUPPRESSED: Incoming caller is whitelisted contact: $currentCallerNumber")
+            return
+        }
+
         val now = System.currentTimeMillis()
         if (now - lastThreatAlertTime < 2500L) {
             return
         }
         lastThreatAlertTime = now
+
+        // Trigger active scam state for Financial App Lockdown on Critical extortion
+        if (analysis.riskLevel == RiskLevel.CRITICAL) {
+            XORcallAccessibilityService.setScamCallActive(true)
+            PackageWatchdog.setScamCallActive(true)
+
+            val scamActiveIntent = Intent("com.xorcall.SCAM_ACTIVE_STATE").apply {
+                putExtra("isActive", true)
+                putExtra("threatMessage", analysis.warningMessage)
+                setPackage(packageName)
+            }
+            sendBroadcast(scamActiveIntent)
+        }
+
         // 1. Hardware Sensory Shockwave
         if (settingsManager.isHapticsEnabled) {
             hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
@@ -299,9 +320,85 @@ class CallMonitorService : Service(), TelemetryListener {
         sendBroadcast(intent)
     }
 
+    /**
+     * Inspects video frame result during video calls (WhatsApp / cellular / web).
+     * Triggers sensory shockwave, HUD overlay, and 1930 dossier record when synthetic deepfake is detected.
+     */
+    fun handleVideoFrameInspection(result: VideoInspectionResult) {
+        if (result.isSynthetic) {
+            // 1. Sensory Haptic Shockwave
+            if (settingsManager.isHapticsEnabled) {
+                hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
+            }
+
+            // 2. High-Priority Floating Deepfake Alert Banner
+            if (settingsManager.isBannerEnabled) {
+                scope.launch(Dispatchers.Main) {
+                    floatingOverlay.showVideoDeepfakeHUD(result.hudBadge, isSynthetic = true)
+                }
+            }
+
+            // 3. Audio Whisper Warning
+            if (settingsManager.isAudioWhisperEnabled) {
+                whisperEngine.speakWarning("Warning: Video deepfake detected! Synthetic face swap avatar identified.")
+            }
+
+            // 4. Silent Guardian Ping
+            if (settingsManager.isFamilyPingEnabled) {
+                guardianPingManager.sendSilentGuardianPing(
+                    callerNumber = currentCallerNumber,
+                    threatSummary = result.hudBadge,
+                    vector = DemographicVector.ALL
+                )
+            }
+
+            // 5. BSA Sec 63 Forensic Audit Log
+            callHistoryManager.recordCall(
+                callerNumber = currentCallerNumber,
+                callerClassification = "VIDEO_DEEPFAKE_FACE_SWAP",
+                vector = DemographicVector.ALL,
+                risk = RiskLevel.CRITICAL,
+                isSynthetic = true,
+                syntheticConfidence = result.deepfakeConfidence,
+                keywords = listOf("VIDEO_DEEPFAKE", "FACE_SWAP", "2D_FFT_LATTICE_ANOMALY"),
+                transcript = result.hudBadge
+            )
+
+            // 6. Broadcast Threat Event to UI
+            val intent = Intent("com.xorcall.THREAT_ALERT").apply {
+                putExtra("level", RiskLevel.CRITICAL.name)
+                putExtra("message", result.hudBadge)
+                putExtra("transcript", result.hudBadge)
+                putExtra("vector", DemographicVector.ALL.name)
+                putExtra("isSynthetic", true)
+                putExtra("syntheticConfidence", result.deepfakeConfidence)
+                putExtra("keywords", arrayOf("VIDEO_DEEPFAKE", "FACE_SWAP", "2D_FFT_LATTICE"))
+                setPackage(packageName)
+            }
+            sendBroadcast(intent)
+        } else {
+            // Verified Biometric Identity: Display green HUD badge if banner enabled
+            if (settingsManager.isBannerEnabled) {
+                scope.launch(Dispatchers.Main) {
+                    floatingOverlay.showVideoDeepfakeHUD(result.hudBadge, isSynthetic = false)
+                }
+            }
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        intent?.getStringExtra("EXTRA_INCOMING_NUMBER")?.let {
-            currentCallerNumber = it
+        intent?.getStringExtra("EXTRA_INCOMING_NUMBER")?.let { incoming ->
+            currentCallerNumber = incoming
+            if (settingsManager.isWhitelistContactsEnabled) {
+                val whitelisted = ContactWhitelistSyncManager.isNumberWhitelisted(this, incoming)
+                if (whitelisted != null) {
+                    isCurrentCallWhitelisted = true
+                    currentCallerClassification = if (whitelisted.isOfficialBankOrEmergency) "VERIFIED_OFFICIAL" else "TRUSTED_CONTACT"
+                    ContactWhitelistSyncManager.handleWhitelistedCall(this, incoming, whitelisted, callHistoryManager)
+                } else {
+                    isCurrentCallWhitelisted = false
+                }
+            }
         }
         intent?.getStringExtra("EXTRA_CLASSIFICATION")?.let {
             currentCallerClassification = it
@@ -319,8 +416,18 @@ class CallMonitorService : Service(), TelemetryListener {
             startAudioCapture(isCallOngoing = true)
         } else if (callState == "IDLE") {
             isCallActive = false
+            isCurrentCallWhitelisted = false
+            XORcallAccessibilityService.setScamCallActive(false)
+            PackageWatchdog.setScamCallActive(false)
+
+            val scamResetIntent = Intent("com.xorcall.SCAM_ACTIVE_STATE").apply {
+                putExtra("isActive", false)
+                setPackage(packageName)
+            }
+            sendBroadcast(scamResetIntent)
+
             currentCallerNumber = "Standby (Shield Armed)"
-            Log.i(TAG, "Call ended (IDLE): Restoring normal audio routing")
+            Log.i(TAG, "Call ended (IDLE): Restoring normal audio routing & clearing threat locks")
             setSpeakerphoneState(false)
             startAudioCapture(isCallOngoing = false)
         }
@@ -512,11 +619,31 @@ class CallMonitorService : Service(), TelemetryListener {
             while (isActive) {
                 delay(2000)
                 try {
+                    // Check A: Remote Desktop Trojans (AnyDesk, RustDesk, TeamViewer)
                     if (packageWatchdog.isDangerousAppInForeground()) {
                         withContext(Dispatchers.Main) {
                             floatingOverlay.showCriticalAlert(
                                 "CRITICAL: Remote desktop trojan detected during call! Blocked to protect bank accounts."
                             )
+                        }
+                    }
+
+                    // Check B: Automatic Financial App Lockdown during active extortion / Digital Arrest threat
+                    if (PackageWatchdog.isScamCallActive && settingsManager.isAppLockdownEnabled) {
+                        val blockedPkg = packageWatchdog.isFinancialAppInForeground()
+                        if (blockedPkg != null) {
+                            withContext(Dispatchers.Main) {
+                                val appName = PackageWatchdog.getFinancialAppName(blockedPkg)
+                                com.xorcall.ui.LockdownActivity.launch(
+                                    context = this@CallMonitorService,
+                                    packageName = blockedPkg,
+                                    appName = appName,
+                                    reason = "Sensitive payment application opened while high-risk extortion call is in progress."
+                                )
+                                floatingOverlay.showCriticalAlert(
+                                    "🚨 FINANCIAL APPS LOCKED: Blocked attempt to launch $appName during active threat call!"
+                                )
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -583,6 +710,8 @@ class CallMonitorService : Service(), TelemetryListener {
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
+        XORcallAccessibilityService.setScamCallActive(false)
+        PackageWatchdog.setScamCallActive(false)
         try {
             unregisterReceiver(settingsReceiver)
         } catch (_: Exception) {}

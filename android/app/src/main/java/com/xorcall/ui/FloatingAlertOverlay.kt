@@ -156,6 +156,136 @@ class FloatingAlertOverlay(private val context: Context) {
         }
     }
 
+    /**
+     * Injects a specialized video call deepfake detection HUD banner directly over
+     * WhatsApp / video call screens.
+     * Displays green verification badge for authentic video feeds or red alert for synthetic avatars.
+     */
+    fun showVideoDeepfakeHUD(hudBadge: String, isSynthetic: Boolean, onDismiss: () -> Unit = {}) {
+        if (isSynthetic) {
+            sendHeadsUpNotification(hudBadge)
+        }
+
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        mainHandler.post {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+                return@post
+            }
+
+            overlayView?.let {
+                try {
+                    windowManager.removeView(it)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                overlayView = null
+            }
+
+            try {
+                val layoutParamsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
+
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    layoutParamsType,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    y = 50
+                }
+
+                val bgColor = if (isSynthetic) 0xF22A0404.toInt() else 0xF2042A14.toInt()
+                val borderColor = if (isSynthetic) 0xFFEF4444.toInt() else 0xFF10B981.toInt()
+
+                val container = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setBackgroundColor(bgColor)
+                    setPadding(36, 24, 36, 24)
+                }
+
+                val header = TextView(context).apply {
+                    text = if (isSynthetic) "🚨 VIDEO CALL DEEPFAKE INTERCEPTED" else "🟢 VERIFIED BIOMETRIC IDENTITY"
+                    textSize = 13f
+                    setTextColor(borderColor)
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                }
+
+                val body = TextView(context).apply {
+                    text = hudBadge
+                    textSize = 12f
+                    setTextColor(0xFFF1F5F9.toInt())
+                    setPadding(0, 10, 0, 14)
+                }
+
+                val buttonRow = LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.END
+                }
+
+                if (isSynthetic) {
+                    val dial1930Btn = TextView(context).apply {
+                        text = "📞 DIAL 1930 HELPLINE"
+                        textSize = 11f
+                        setTextColor(0xFFFFFFFF.toInt())
+                        setBackgroundColor(0xFFDC2626.toInt())
+                        setPadding(24, 14, 24, 14)
+                        setTypeface(typeface, android.graphics.Typeface.BOLD)
+                        setOnClickListener {
+                            try {
+                                val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:1930")).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(dialIntent)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                            dismiss()
+                            onDismiss()
+                        }
+                    }
+                    buttonRow.addView(dial1930Btn)
+                }
+
+                val dismissBtn = TextView(context).apply {
+                    text = if (isSynthetic) "DISMISS" else "CLOSE HUD"
+                    textSize = 11f
+                    setTextColor(0xFF94A3B8.toInt())
+                    setPadding(24, 14, 24, 14)
+                    setOnClickListener {
+                        dismiss()
+                        onDismiss()
+                    }
+                }
+                buttonRow.addView(dismissBtn)
+
+                container.addView(header)
+                container.addView(body)
+                container.addView(buttonRow)
+
+                overlayView = container
+                windowManager.addView(container, params)
+
+                // For authentic human HUD, auto-dismiss after 4 seconds
+                if (!isSynthetic) {
+                    mainHandler.postDelayed({
+                        if (overlayView == container) {
+                            dismiss()
+                        }
+                    }, 4000L)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     private fun sendHeadsUpNotification(warningText: String) {
         try {
             val openAppIntent = Intent(context, MainActivity::class.java).apply {

@@ -41,6 +41,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.LockdownActivity"
+            android:exported="false"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+
         <service
             android:name=".service.CallMonitorService"
             android:foregroundServiceType="microphone"

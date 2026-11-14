@@ -18,6 +18,7 @@ from decoy.ramesh_gupta import RameshGuptaDecoy
 from services.family_broker import FamilyBroker
 from services.emergency_verifier import EmergencyVerifier
 from services.dossier_generator import DossierGenerator
+from services.vision_inspector import VisionInspector
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -46,9 +47,16 @@ cloud_stt = CloudSTTEngine()
 family_broker = FamilyBroker()
 emergency_verifier = EmergencyVerifier()
 dossier_generator = DossierGenerator()
+vision_inspector = VisionInspector()
 
 # Active In-Memory Honeypots & Connection Managers
 active_decoys: Dict[str, RameshGuptaDecoy] = {}
+
+class VideoFramePayload(BaseModel):
+    image_base64: Optional[str] = None
+    frame_id: Optional[str] = None
+    timestamp_ms: Optional[int] = None
+    simulation_mode: Optional[str] = None  # "human", "deepfake"
 
 class TurnPayload(BaseModel):
     session_id: str
@@ -84,10 +92,41 @@ async def analyze_turn(payload: TurnPayload):
     )
 
 @app.post("/api/vision/inspect-frame")
+@app.post("/api/v1/inspect/video-frame")
 async def inspect_frame(file: UploadFile = File(...)):
-    """Inspects a video call frame for 2D-FFT lattice grids and boundary seams."""
+    """
+    Inspects a video call frame for 2D-FFT azimuthal lattice grids,
+    boundary seam warping, and synthetic deepfake signatures.
+    """
     image_bytes = await file.read()
-    return vision_engine.analyze_frame_bytes(image_bytes)
+    return vision_inspector.inspect_frame_bytes(image_bytes)
+
+@app.post("/api/v1/inspect/video-frame/json")
+async def inspect_video_frame_json(payload: VideoFramePayload):
+    """
+    JSON endpoint for video call deepfake inspection.
+    Accepts base64 encoded frame or simulated feed types ("human" or "deepfake").
+    """
+    import base64
+    import numpy as np
+
+    if payload.simulation_mode == "human":
+        np.random.seed(42)
+        clean_frame = np.clip(np.random.normal(120, 25, (256, 256, 3)), 0, 255).astype(np.uint8)
+        return vision_inspector.inspect_frame(clean_frame)
+    elif payload.simulation_mode == "deepfake":
+        checkerboard = np.zeros((256, 256, 3), dtype=np.uint8)
+        checkerboard[::4, ::4, :] = 255
+        return vision_inspector.inspect_frame(checkerboard)
+
+    if not payload.image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 or simulation_mode required")
+
+    try:
+        raw_bytes = base64.b64decode(payload.image_base64)
+        return vision_inspector.inspect_frame_bytes(raw_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to decode base64 image: {str(e)}")
 
 @app.post("/api/voice/inspect-pcm")
 async def inspect_pcm(file: UploadFile = File(...)):

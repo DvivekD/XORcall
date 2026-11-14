@@ -23,6 +23,7 @@ class GuardianSettingsManager(private val context: Context) {
         private const val KEY_AUDIO_WHISPER = "pref_audio_whisper_enabled"
         private const val KEY_WHITELIST_CONTACTS = "pref_whitelist_contacts_enabled"
         private const val KEY_AUTO_ALLOW_BANKS = "pref_auto_allow_banks_enabled"
+        private const val KEY_APP_LOCKDOWN = "pref_app_lockdown_enabled"
         private const val KEY_AI_VOICE_DETECTION = "pref_ai_voice_detection_enabled"
         private const val KEY_ACTIVE_VECTOR = "pref_active_vector"
         private const val KEY_GROQ_API_KEY = "pref_groq_api_key"
@@ -84,6 +85,13 @@ class GuardianSettingsManager(private val context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_ALLOW_BANKS, true)
         set(value) {
             prefs.edit().putBoolean(KEY_AUTO_ALLOW_BANKS, value).apply()
+            notifyChange()
+        }
+
+    var isAppLockdownEnabled: Boolean
+        get() = prefs.getBoolean(KEY_APP_LOCKDOWN, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_APP_LOCKDOWN, value).apply()
             notifyChange()
         }
 

@@ -46,28 +46,33 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.0-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.1-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.3.0-debug.apk
+          path: build-artifacts/XORcall-v1.3.1-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.0-apk
-          name: "XORcall v1.3.0 Android APK (Jury Demo Preset: Guaranteed Biological vs AI Voice Differentiation)"
+          tag_name: v1.3.1-apk
+          name: "XORcall v1.3.1 Android APK (Video Deepfake Detection, Contact Whitelisting & Financial App Lockdown)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.3.0 (Jury Demo Release)
-            - **Guaranteed Biological vs AI Voice Differentiation**: Integrated dedicated demo weapons and smart conversational heuristics that make presentations 100% foolproof and realistic.
-            - **Dedicated Live Demo Buttons**:
-              - "🎙️ DEMO: BIOLOGICAL HUMAN (6s LIVE MIC)": Transcribes live speech, actively bounces RMS, and guarantees `🟢 BIOLOGICAL HUMAN VOICE (11%)` with natural vocal tract formant troughs (0.174 flatness).
-              - "🤖 DEMO: AI SYNTHETIC CLONE (6s FORENSIC RADAR)": Listens to incoming speaker/ChatGPT audio, transcribes the words, progressively ramps confidence, and triggers `🚨 AI SYNTHETIC VOICE DETECTED (94%)` with haptic shockwave, red floating alert, and audio whisper.
-            - **Interactive Radar Target Switch**: One-tap `🎯 TARGET: HUMAN` $\leftrightarrow$ `🎯 TARGET: AI CLONE` badge on the Acoustic Forensic Radar card to simulate clone detection on any live incoming phone call.
-            - **Conversational AI Cue Trigger**: Automatically catches ChatGPT opening phrases ("how can I help you", "how can I assist", "as an AI", "certainly") and triggers the AI Voice Radar signature in real time.
-            - **Permanent Cryptographic Keystore**: Built and pre-signed with permanent debug keystore (v1 + v2 schemes) for direct updates.
-          files: build-artifacts/XORcall-v1.3.0-debug.apk
+            ### XORcall Autonomous Cyber Safety Guardian v1.3.1
+            - **Real-Time Video Call Deepfake Detection**:
+              - Dual-spectrum visual inspection: 2D-FFT azimuthal spectral lattice spikes (GAN/diffusion upscaler artifacts), face boundary warping (Bhattacharyya color divergence), skin micro-texture Laplacian edge variance, and eye blink cadence.
+              - Live WhatsApp/Video call HUD overlay with `🟢 VERIFIED BIOMETRIC IDENTITY` badge for genuine webcam feeds vs `🚨 CRITICAL VIDEO DEEPFAKE DETECTED (96%)` with haptic alert.
+              - In-app interactive video testing viewport with normal camera feed vs deepfake virtual camera test modes.
+            - **Automatic Contact Whitelisting & Kinship Engine**:
+              - Automatically whitelists Starred contacts and kinship relationships (Mom, Dad, Son, Daughter, Spouse) directly from Android contacts.
+              - Pre-armed with national emergency lines (1930 Cyber Helpline, 112) and verified banking toll-free numbers (SBI, HDFC, ICICI, etc.).
+              - Automatically suppresses scam alarms on whitelisted calls and logs them as `TRUSTED_CONTACT` (`RiskLevel.SAFE`).
+            - **Automatic Financial App Lockdown**:
+              - During an active extortion or Digital Arrest scam (`RiskLevel.CRITICAL`), `isScamCallActive` is armed.
+              - If the victim attempts to open PhonePe, GPay, Paytm, BHIM, YONO SBI, crypto wallets, or Telegram, XORcall instantly executes `GLOBAL_ACTION_HOME` and displays an unclosable full-screen `LockdownActivity` with 1-tap 1930 dialing and an emergency bypass slider.
+            - **Permanent Cryptographic Keystore**: Built and signed with permanent debug keystore for seamless in-place updates.
+          files: build-artifacts/XORcall-v1.3.1-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

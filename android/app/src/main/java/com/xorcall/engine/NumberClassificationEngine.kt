@@ -78,7 +78,31 @@ object NumberClassificationEngine {
             )
         }
 
-        // 1. Check Official Emergency Lines
+        // 1. Check ContactWhitelistSyncManager (Automatic Starred, Kinship Family & Verified Helplines)
+        val whitelisted = ContactWhitelistSyncManager.isNumberWhitelisted(context, cleanNumber)
+        if (whitelisted != null) {
+            val category = if (whitelisted.isOfficialBankOrEmergency) {
+                if (whitelisted.relationship.contains("Emergency", ignoreCase = true) ||
+                    whitelisted.relationship.contains("Police", ignoreCase = true) ||
+                    whitelisted.relationship.contains("Cyber", ignoreCase = true)
+                ) {
+                    NumberCategory.VERIFIED_EMERGENCY_POLICE
+                } else {
+                    NumberCategory.VERIFIED_OFFICIAL_BANK
+                }
+            } else {
+                NumberCategory.TRUSTED_CONTACT
+            }
+            return NumberClassification(
+                rawNumber = cleanNumber,
+                category = category,
+                entityName = "${whitelisted.name} (${whitelisted.relationship})",
+                isAutoWhitelisted = true,
+                requiresActiveMonitoring = false
+            )
+        }
+
+        // 2. Check Official Emergency Lines
         OFFICIAL_EMERGENCY_NUMBERS[cleanNumber]?.let { name ->
             return NumberClassification(
                 rawNumber = cleanNumber,
