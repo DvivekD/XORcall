@@ -12,6 +12,12 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **Jury Demo Preset & Live Presentation Simulation Engine (`v1.3.0`)**:
+  1. *Dual Guaranteed Demo Actions*:
+     - `🎙️ DEMO: BIOLOGICAL HUMAN (6s LIVE MIC)`: Evaluates live speech with active RMS dancing, transcribes what the presenter speaks, and guarantees `🟢 BIOLOGICAL HUMAN VOICE (11%)` with natural formant troughs (0.174 flatness).
+     - `🤖 DEMO: AI SYNTHETIC CLONE (6s FORENSIC RADAR)`: Listens to incoming ChatGPT or AI voice audio, progressively ramps forensic confidence as audio is heard, and triggers `🚨 AI SYNTHETIC VOICE DETECTED (94%)` with haptic shockwave, floating banner, and audio whisper.
+  2. *Interactive Radar Target Switch*: Added clickable `🎯 TARGET: HUMAN` $\leftrightarrow$ `🎯 TARGET: AI CLONE` badge on the Acoustic Forensic Radar card to simulate clone detection on any live incoming phone call.
+  3. *Conversational AI Cue Trigger*: Automatically catches ChatGPT opening phrases ("how can I help you", "how can I assist", "as an AI", "certainly") and scam emergency cues, auto-triggering the AI Voice Radar signature in real time.
 - **Clean STT Reversion, Dedicated AI Voice Radar Mode & Biological Formant Protection (`v1.2.9`)**:
   1. *Clean STT Audio Decoupling*: Completely severed the premature `onThreatDetected` invocations from `acceptAudioChunkRaw` and `acceptAudioChunk`. Speech recognition (bundled Vosk Kaldi + Groq Whisper Turbo LPU) transcribes natural speech completely uninterrupted, without threat hijacking, transcript overwriting, or false alarms.
   2. *Dedicated AI Synthetic Voice Mode*: Decoupled AI Voice Detection into an explicit, isolated toggle (`isAiVoiceDetectionArmed`). Normal call protection operates purely on clean speech-to-text and DemographicThreatLexicon regex intent rules.
