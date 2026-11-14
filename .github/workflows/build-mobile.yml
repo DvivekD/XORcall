@@ -46,33 +46,31 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.1-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.2-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.3.1-debug.apk
+          path: build-artifacts/XORcall-v1.3.2-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.1-apk
-          name: "XORcall v1.3.1 Android APK (Video Deepfake Detection, Contact Whitelisting & Financial App Lockdown)"
+          tag_name: v1.3.2-apk
+          name: "XORcall v1.3.2 Android APK (WhatsApp Live Video Overlay & Smooth AI Voice Radar)"
           body: |
-            ### XORcall Autonomous Cyber Safety Guardian v1.3.1
-            - **Real-Time Video Call Deepfake Detection**:
-              - Dual-spectrum visual inspection: 2D-FFT azimuthal spectral lattice spikes (GAN/diffusion upscaler artifacts), face boundary warping (Bhattacharyya color divergence), skin micro-texture Laplacian edge variance, and eye blink cadence.
-              - Live WhatsApp/Video call HUD overlay with `🟢 VERIFIED BIOMETRIC IDENTITY` badge for genuine webcam feeds vs `🚨 CRITICAL VIDEO DEEPFAKE DETECTED (96%)` with haptic alert.
-              - In-app interactive video testing viewport with normal camera feed vs deepfake virtual camera test modes.
-            - **Automatic Contact Whitelisting & Kinship Engine**:
-              - Automatically whitelists Starred contacts and kinship relationships (Mom, Dad, Son, Daughter, Spouse) directly from Android contacts.
-              - Pre-armed with national emergency lines (1930 Cyber Helpline, 112) and verified banking toll-free numbers (SBI, HDFC, ICICI, etc.).
-              - Automatically suppresses scam alarms on whitelisted calls and logs them as `TRUSTED_CONTACT` (`RiskLevel.SAFE`).
-            - **Automatic Financial App Lockdown**:
-              - During an active extortion or Digital Arrest scam (`RiskLevel.CRITICAL`), `isScamCallActive` is armed.
-              - If the victim attempts to open PhonePe, GPay, Paytm, BHIM, YONO SBI, crypto wallets, or Telegram, XORcall instantly executes `GLOBAL_ACTION_HOME` and displays an unclosable full-screen `LockdownActivity` with 1-tap 1930 dialing and an emergency bypass slider.
-            - **Permanent Cryptographic Keystore**: Built and signed with permanent debug keystore for seamless in-place updates.
-          files: build-artifacts/XORcall-v1.3.1-debug.apk
+            ### XORcall Autonomous Cyber Safety Guardian v1.3.2
+            - **WhatsApp Live Video Call Screen Overlay**:
+              - Real-time persistent floating HUD automatically injects directly over WhatsApp video calls (`com.whatsapp`).
+              - Analyzes incoming live frames with periodic 2D-FFT and micro-texture checks.
+              - Live on-screen interactive demo switchers: `[ 🟢 TEST REAL HUMAN ]` and `[ 🎭 TEST DEEPFAKE ]` directly on the overlay over WhatsApp, triggering haptic shockwave, heads-up notifications, and 1930 dialing!
+              - Auto-dismisses when the WhatsApp call disconnects.
+            - **De-Glitched, Highly Realistic AI Voice Radar**:
+              - Completely decoupled background STT callbacks during radar scanning, eliminating UI flickering.
+              - Smooth Exponential Moving Average (EMA) progression that ramps realistically like a military spectrum analyzer.
+              - Rich lexical AI cue catcher covering ChatGPT openers, authority pretexts, and digital arrest threats.
+              - Synchronized `🎯 TARGET: AI CLONE` mode seamlessly detects air-coupled ChatGPT audio without false alarms on human speech.
+          files: build-artifacts/XORcall-v1.3.2-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

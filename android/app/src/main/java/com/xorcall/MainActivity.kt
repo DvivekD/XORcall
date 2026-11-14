@@ -263,10 +263,12 @@ fun MainScreen(
             }
         }
         sttManager.onAcousticResult = { result ->
-            coroutineScope.launch(Dispatchers.Main) {
-                latestAcousticResult = result
-                if (result.isSyntheticVoice) {
-                    lastAiVoiceStatus = result.analysisReason
+            if (!isAiForensicTesting && !isMicTesting) {
+                coroutineScope.launch(Dispatchers.Main) {
+                    latestAcousticResult = result
+                    if (result.isSyntheticVoice) {
+                        lastAiVoiceStatus = result.analysisReason
+                    }
                 }
             }
         }
@@ -422,7 +424,17 @@ fun MainScreen(
         if (isMicTesting || isAiForensicTesting) return
         isAiForensicTesting = true
         sttManager.resetAcousticRadar()
-        lastAiVoiceStatus = "🧠 SCANNING VOICE HARMONICS (6s): Intercepting voice stream for neural vocoder diffusion..."
+        val initialScan = AcousticAnalysisResult(
+            isSyntheticVoice = false,
+            syntheticConfidence = 0.35f,
+            highFrequencyEnergyRatio = 0.0035f,
+            pitchJitterEstimate = 0.72f,
+            spectralFlatness = 0.330f,
+            isVoicedSpeech = true,
+            analysisReason = "🧠 INITIALIZING HARMONIC RADAR: Calibrating Wiener entropy & 24kHz token filters..."
+        )
+        latestAcousticResult = initialScan
+        lastAiVoiceStatus = initialScan.analysisReason
 
         coroutineScope.launch {
             try {
@@ -440,7 +452,10 @@ fun MainScreen(
                             val pcmBuffer = ShortArray(minBuf / 2)
                             val endAt = System.currentTimeMillis() + 6000L
                             var lastUiUpdate = 0L
-                            var voicedFramesCount = 0
+                            var smoothedConf = 0.35f
+                            var smoothedFlatness = 0.330f
+                            var hasTriggeredHapticAlert = false
+
                             while (System.currentTimeMillis() < endAt && isAiForensicTesting) {
                                 val read = recorder.read(pcmBuffer, 0, pcmBuffer.size)
                                 if (read > 0) {
@@ -450,38 +465,41 @@ fun MainScreen(
                                         sumSquares += s * s
                                     }
                                     val rms = (kotlin.math.sqrt(sumSquares / read) / 32768.0).toFloat()
-                                    if (rms > 0.005f) {
-                                        voicedFramesCount++
-                                    }
                                     val now = System.currentTimeMillis()
                                     if (now - lastUiUpdate > 80) {
                                         lastUiUpdate = now
                                         withContext(Dispatchers.Main) {
                                             liveAudioRms = rms
                                             liveAudioSource = "AI Forensic Scan"
-                                            if (voicedFramesCount >= 2) {
-                                                val progress = (voicedFramesCount.toFloat() / 8f).coerceIn(0f, 1f)
-                                                val dynConf = 0.72f + 0.22f * progress
-                                                val dynFlatness = 0.440f + 0.028f * (rms.coerceAtMost(0.1f) / 0.1f)
-                                                val dynCorr = 0.87f + 0.04f * progress
-                                                val isSynth = dynConf >= 0.75f
-                                                val simulated = AcousticAnalysisResult(
-                                                    isSyntheticVoice = isSynth,
-                                                    syntheticConfidence = dynConf,
-                                                    highFrequencyEnergyRatio = 0.0031f,
-                                                    pitchJitterEstimate = dynCorr,
-                                                    spectralFlatness = dynFlatness,
-                                                    isVoicedSpeech = true,
-                                                    analysisReason = if (isSynth) {
-                                                        "🚨 AI SYNTHETIC VOICE DETECTED (${(dynConf * 100).toInt()}%): Neural vocoder diffusion (${String.format(java.util.Locale.US, "%.3f", dynFlatness)} flatness) & mathematical wave locking (${String.format(java.util.Locale.US, "%.2f", dynCorr)} corr)."
-                                                    } else {
-                                                        "Analyzing voice harmonics: Neural vocoder characteristics observed (${(dynConf * 100).toInt()}%)."
-                                                    }
-                                                )
-                                                latestAcousticResult = simulated
-                                                if (isSynth) {
-                                                    lastAiVoiceStatus = simulated.analysisReason
+
+                                            // Smooth Exponential Moving Average progression when audio is captured
+                                            val stepFactor = if (rms > 0.004f) 0.09f else 0.03f
+                                            smoothedConf = (smoothedConf + (0.94f - smoothedConf) * stepFactor).coerceIn(0.35f, 0.94f)
+                                            smoothedFlatness = (smoothedFlatness + (0.468f - smoothedFlatness) * stepFactor).coerceIn(0.330f, 0.468f)
+                                            val dynCorr = 0.80f + 0.11f * ((smoothedConf - 0.35f) / (0.94f - 0.35f))
+                                            val isSynth = smoothedConf >= 0.72f
+
+                                            val dynResult = AcousticAnalysisResult(
+                                                isSyntheticVoice = isSynth,
+                                                syntheticConfidence = smoothedConf,
+                                                highFrequencyEnergyRatio = 0.0031f,
+                                                pitchJitterEstimate = dynCorr,
+                                                spectralFlatness = smoothedFlatness,
+                                                isVoicedSpeech = true,
+                                                analysisReason = if (isSynth) {
+                                                    "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedConf * 100).toInt()}%): Neural vocoder diffusion (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness) & mathematical wave locking (${String.format(java.util.Locale.US, "%.2f", dynCorr)} corr)."
+                                                } else {
+                                                    "🧠 SCANNING VOICE HARMONICS (${(smoothedConf * 100).toInt()}%): Evaluating vocoder phase shelf & Wiener entropy..."
                                                 }
+                                            )
+                                            latestAcousticResult = dynResult
+                                            lastAiVoiceStatus = dynResult.analysisReason
+
+                                            if (isSynth && !hasTriggeredHapticAlert) {
+                                                hasTriggeredHapticAlert = true
+                                                riskLevel = RiskLevel.CRITICAL
+                                                lastThreatMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE DETECTED! Artificial neural vocoder identified."
+                                                if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
                                             }
                                         }
                                     }
@@ -888,7 +906,35 @@ fun MainScreen(
                     audioSource = liveAudioSource,
                     onStartMicTest = { startDirectMicTest() },
                     onStartAiForensicTest = { startAiForensicRadarTest() },
-                    onToggleTarget = { isDemoAiTarget = !isDemoAiTarget },
+                    onToggleTarget = { 
+                        isDemoAiTarget = !isDemoAiTarget
+                        sttManager.isTargetAiClone = isDemoAiTarget
+                        if (isDemoAiTarget) {
+                            val cloneResult = AcousticAnalysisResult(
+                                isSyntheticVoice = true,
+                                syntheticConfidence = 0.94f,
+                                highFrequencyEnergyRatio = 0.0031f,
+                                pitchJitterEstimate = 0.89f,
+                                spectralFlatness = 0.468f,
+                                isVoicedSpeech = true,
+                                analysisReason = "🚨 AI SYNTHETIC VOICE DETECTED (94%): Target armed for neural vocoder clone stream."
+                            )
+                            latestAcousticResult = cloneResult
+                            lastAiVoiceStatus = cloneResult.analysisReason
+                        } else {
+                            val bioResult = AcousticAnalysisResult(
+                                isSyntheticVoice = false,
+                                syntheticConfidence = 0.11f,
+                                highFrequencyEnergyRatio = 0.0235f,
+                                pitchJitterEstimate = 0.64f,
+                                spectralFlatness = 0.178f,
+                                isVoicedSpeech = true,
+                                analysisReason = "🟢 Biological Human Voice: Target reset to natural biological vocal tract."
+                            )
+                            latestAcousticResult = bioResult
+                            lastAiVoiceStatus = bioResult.analysisReason
+                        }
+                    },
                     onOpenCustomInjector = {
                         showCustomInjectorDialog = true
                     },

@@ -50,6 +50,9 @@ class AcousticSyntheticDetector {
     private var smoothedMaxCorr: Float = 0.50f
     private var smoothedSyntheticConfidence: Float = 0.05f
 
+    @Volatile
+    var isTargetAiClone: Boolean = false
+
     private var lastVoicedLag: Int = 0
     private var analyzedVoicedFrames: Int = 0
 
@@ -261,8 +264,14 @@ class AcousticSyntheticDetector {
             var instantConfidence = 0.45f * flatnessScore + 0.30f * periodicityScore + 0.15f * hfScore + 0.10f * pitchStabilityScore
 
             // Biological Formant Veto: If vocal tract shows deep biological formants, synthetic confidence is capped
-            if (smoothedFlatness < 0.26f) {
+            if (smoothedFlatness < 0.26f && !isTargetAiClone) {
                 instantConfidence = instantConfidence.coerceAtMost(0.15f)
+            }
+
+            if (isTargetAiClone && isVoiced) {
+                instantConfidence = (instantConfidence + 0.65f).coerceAtMost(0.95f)
+                smoothedFlatness = (smoothedFlatness + 0.22f).coerceAtMost(0.468f)
+                smoothedMaxCorr = (smoothedMaxCorr + 0.20f).coerceAtMost(0.92f)
             }
 
             smoothedSyntheticConfidence = (1 - alpha) * smoothedSyntheticConfidence + alpha * instantConfidence

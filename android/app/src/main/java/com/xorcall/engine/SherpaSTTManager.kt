@@ -46,6 +46,11 @@ class SherpaSTTManager(
 
     var activeScope: DemographicVector = DemographicVector.ALL
     var isAiVoiceArmed: Boolean = false
+    var isTargetAiClone: Boolean
+        get() = syntheticDetector.isTargetAiClone
+        set(value) {
+            syntheticDetector.isTargetAiClone = value
+        }
     var onThreatDetected: ((analysis: ThreatAnalysis, transcript: String) -> Unit)? = null
     var onAcousticResult: ((result: AcousticAnalysisResult) -> Unit)? = null
     var onLiveTranscriptUpdate: ((transcript: String, isEndpoint: Boolean) -> Unit)? = null
@@ -130,7 +135,18 @@ class SherpaSTTManager(
                 lower.contains("bail money") ||
                 lower.contains("accident") ||
                 lower.contains("5 lakh") ||
-                lower.contains("police custody")
+                lower.contains("police custody") ||
+                lower.contains("i'm an ai") ||
+                lower.contains("i am a language model") ||
+                lower.contains("inspector") ||
+                lower.contains("cyber cell") ||
+                lower.contains("supreme court") ||
+                lower.contains("transfer") ||
+                lower.contains("rbi") ||
+                lower.contains("customs") ||
+                lower.contains("fedex") ||
+                lower.contains("courier") ||
+                lower.contains("parcel")
 
         if (isAiSpokenPhrase) {
             val synthResult = AcousticAnalysisResult(

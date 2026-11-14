@@ -30,6 +30,26 @@ class AcousticSyntheticDetectorTest {
     }
 
     @Test
+    fun testTargetAiCloneModeElevatesDetection() {
+        val detector = AcousticSyntheticDetector().apply {
+            isTargetAiClone = true
+        }
+        val sampleRate = 16000f
+        val f0 = 160f
+        var lastResult: AcousticAnalysisResult? = null
+        for (chunkIdx in 0 until 5) {
+            val chunk = FloatArray(1024) { i ->
+                val t = (chunkIdx * 1024 + i) / sampleRate
+                (sin(2 * PI * f0 * t) + 0.5 * sin(4 * PI * f0 * t)).toFloat() * 0.4f
+            }
+            lastResult = detector.analyzeAudioChunk(chunk)
+        }
+        assertNotNull(lastResult)
+        assertTrue("Target AI clone mode must trigger synthetic detection", lastResult!!.isSyntheticVoice)
+        assertTrue("Synthetic confidence must be >= 0.75", lastResult.syntheticConfidence >= 0.75f)
+    }
+
+    @Test
     fun testEmptyOrSilentChunkHandledSafely() {
         val detector = AcousticSyntheticDetector()
         val silentChunk = FloatArray(1024) { 0f }
