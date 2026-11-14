@@ -227,37 +227,76 @@ def download_dossier(session_id: str):
 # ---------------- REMOTE DEMO TRIGGER ENDPOINTS ----------------
 demo_state = {
     "mode": "human",
+    "target_mode": "human",
+    "switch_at": 0.0,
     "updated_at": 0.0
 }
 
 @app.get("/api/v1/demo/trigger")
 @app.post("/api/v1/demo/trigger")
-def trigger_demo_mode(mode: str = "toggle"):
+def trigger_demo_mode(mode: str = "toggle", delay: Optional[float] = None):
     """
     Remote webhook endpoint for stage demos.
     Can be triggered via iOS Shortcuts, Back Tap, or any browser request.
-    Supports ?mode=ai, ?mode=human, or ?mode=toggle.
+    When triggered via shortcut, waits 10s of normal human speech before switching to synthetic!
+    When rerun via shortcut, immediately resets back to human mode!
     """
     import time
     global demo_state
+    now = time.time()
+
     if mode == "toggle":
-        demo_state["mode"] = "ai" if demo_state["mode"] == "human" else "human"
-    elif mode in ("ai", "human"):
-        demo_state["mode"] = mode
-    demo_state["updated_at"] = time.time()
+        target = "human" if demo_state.get("target_mode") == "ai" else "ai"
+        effective_delay = 10.0 if delay is None else delay
+    elif mode == "ai":
+        target = "ai"
+        effective_delay = 0.0 if delay is None else delay
+    elif mode == "human":
+        target = "human"
+        effective_delay = 0.0
+    else:
+        target = "ai"
+        effective_delay = 10.0 if delay is None else delay
+
+    demo_state["target_mode"] = target
+    demo_state["updated_at"] = now
+
+    if target == "ai":
+        if effective_delay > 0:
+            demo_state["switch_at"] = now + effective_delay
+            demo_state["mode"] = "human" # stays human until timer fires
+        else:
+            demo_state["switch_at"] = now
+            demo_state["mode"] = "ai"
+    else:
+        demo_state["switch_at"] = now
+        demo_state["mode"] = "human"
+
     return {
         "status": "success",
         "active_mode": demo_state["mode"],
+        "target_mode": demo_state["target_mode"],
         "is_synthetic": demo_state["mode"] == "ai",
+        "switch_in_seconds": max(0.0, demo_state["switch_at"] - now),
         "updated_at": demo_state["updated_at"]
     }
 
 @app.get("/api/v1/demo/state")
 def get_demo_mode_state():
+    import time
+    now = time.time()
+    if demo_state.get("target_mode") == "ai" and now >= demo_state.get("switch_at", 0.0):
+        demo_state["mode"] = "ai"
+    elif demo_state.get("target_mode") == "human":
+        demo_state["mode"] = "human"
+
+    is_synth = demo_state.get("mode") == "ai"
     return {
-        "active_mode": demo_state["mode"],
-        "is_synthetic": demo_state["mode"] == "ai",
-        "updated_at": demo_state["updated_at"]
+        "active_mode": demo_state.get("mode", "human"),
+        "target_mode": demo_state.get("target_mode", "human"),
+        "is_synthetic": is_synth,
+        "switch_in_seconds": max(0.0, demo_state.get("switch_at", 0.0) - now),
+        "updated_at": demo_state.get("updated_at", 0.0)
     }
 
 # ---------------- WEBSOCKET STREAMING ----------------

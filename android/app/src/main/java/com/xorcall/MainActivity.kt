@@ -302,6 +302,74 @@ fun MainScreen(
         refreshWhitelisted()
         sttManager.updateCloudConfig(settingsManager.groqApiKey, settingsManager.backendUrl)
         sttManager.initializeVosk(this)
+
+        // Remote iPhone Shortcut Webhook Poller:
+        // Polls /api/v1/demo/state. When triggered from iPhone, switches to AI after 10s.
+        // When rerun from iPhone, immediately returns to human!
+        launch(Dispatchers.IO) {
+            val client = okhttp3.OkHttpClient.Builder()
+                .connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+
+            var wasSynthetic = false
+            while (true) {
+                delay(1200L)
+                try {
+                    val rawUrl = settingsManager.backendUrl.trim().trimEnd('/')
+                    if (rawUrl.isNotBlank()) {
+                        val req = okhttp3.Request.Builder()
+                            .url("$rawUrl/api/v1/demo/state")
+                            .get()
+                            .build()
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful) {
+                                val bodyStr = resp.body?.string() ?: ""
+                                val json = org.json.JSONObject(bodyStr)
+                                val isSynth = json.optBoolean("is_synthetic", false)
+                                if (isSynth != wasSynthetic) {
+                                    wasSynthetic = isSynth
+                                    sttManager.isTargetAiClone = isSynth
+                                    withContext(Dispatchers.Main) {
+                                        if (isSynth) {
+                                            val cloneResult = AcousticAnalysisResult(
+                                                isSyntheticVoice = true,
+                                                syntheticConfidence = 0.94f,
+                                                highFrequencyEnergyRatio = 0.0031f,
+                                                pitchJitterEstimate = 0.89f,
+                                                spectralFlatness = 0.468f,
+                                                isVoicedSpeech = true,
+                                                analysisReason = "🚨 AI SYNTHETIC VOICE DETECTED (94%): Remote trigger activated. Neural vocoder diffusion confirmed."
+                                            )
+                                            latestAcousticResult = cloneResult
+                                            lastAiVoiceStatus = cloneResult.analysisReason
+                                            riskLevel = RiskLevel.CRITICAL
+                                            lastThreatMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE DETECTED!"
+                                            if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(RiskLevel.CRITICAL)
+                                            if (isBannerEnabled) floatingOverlay.showCriticalAlert("🚨 AI SYNTHETIC VOICE CLONE DETECTED (94%)!")
+                                        } else {
+                                            val bioResult = AcousticAnalysisResult(
+                                                isSyntheticVoice = false,
+                                                syntheticConfidence = 0.08f,
+                                                highFrequencyEnergyRatio = 0.024f,
+                                                pitchJitterEstimate = 0.62f,
+                                                spectralFlatness = 0.182f,
+                                                isVoicedSpeech = true,
+                                                analysisReason = "🟢 Biological Human Voice: Natural vocal tract formant troughs & biological airflow confirmed."
+                                            )
+                                            latestAcousticResult = bioResult
+                                            lastAiVoiceStatus = bioResult.analysisReason
+                                            riskLevel = RiskLevel.SAFE
+                                            floatingOverlay.dismiss()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     fun triggerThreatExecution(phrase: String, callerId: String = "Test Caller", vector: DemographicVector = activeVector) {

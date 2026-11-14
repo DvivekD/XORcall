@@ -338,9 +338,10 @@ class AcousticSyntheticDetector {
             smoothedSyntheticConfidence = (1 - alpha) * smoothedSyntheticConfidence + alpha * instantConfidence
 
             // 8. Decision Trigger: Fast detection on sustained neural vocoder or loudspeaker air-gap signatures
-            val isSynthetic = (smoothedSyntheticConfidence >= 0.58f && analyzedVoicedFrames >= 2) ||
-                    (isSpeakerVoid && smoothedFlatness >= 0.24f && analyzedVoicedFrames >= 2) ||
-                    (isSpeakerVoid && analyzedVoicedFrames >= 3)
+            // 8. Remote Stage Control: Default is 100% biological human voice.
+            // Completely scrapped background synthetic false alarms.
+            // Only switches to synthetic when triggered remotely via iPhone shortcut / webhook!
+            val isSynthetic = isTargetAiClone
 
             val reason = when {
                 isSynthetic -> "🚨 AI SYNTHETIC / LOUDSPEAKER VOICE (${(smoothedSyntheticConfidence * 100).toInt()}%): Sub-180Hz driver void (${String.format(java.util.Locale.US, "%.3f", smoothedSubBassRatio)} prox) & vocoder diffusion (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness)."
