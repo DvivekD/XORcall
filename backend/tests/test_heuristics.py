@@ -176,3 +176,14 @@ def test_authority_payment_without_isolation():
     assert r2["risk_score"] >= 0.90
     assert r2["threat_type"] == "DIGITAL_ARREST_SCAM"
     assert r2["kill_chain_stage"] >= 4
+
+def test_benign_casual_daughter_hospital_lakhs_safe():
+    session = CallHeuristicSession("test_benign_casual_01")
+    # Routine family and hospital mentions without payment demand or coercive threats
+    r1 = session.feed("My daughter visited the hospital yesterday for a routine checkup.")
+    assert r1["level"] == "SAFE"
+    assert r1["threat_type"] != "KINSHIP_DEEPFAKE_EXTORTION"
+    assert r1["threat_type"] != "DIGITAL_ARREST_SCAM"
+
+    r2 = session.feed("We bought a car for 5 lakhs with our normal bank savings.")
+    assert r2["level"] == "SAFE"

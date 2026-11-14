@@ -174,12 +174,12 @@ class SherpaSTTManager(
             cloudAudioBuffer.write(byteChunk)
             val currentBytes = cloudAudioBuffer.size()
 
-            // Trigger cloud transcription when:
-            // A) Buffer reaches ~2 seconds of audio (64,000 bytes) AND had active speech, OR
-            // B) Buffer has >= 1 second of speech AND speaker paused for > 350ms
-            val hasEnoughSpeech = voicedChunksInCurrentBuffer >= 4
-            val isBufferFull = currentBytes >= 64000
-            val isSpeechPaused = (now - lastSpeechTimestamp > 350) && currentBytes >= 32000
+            // Sentence-Aligned Adaptive VAD for Groq Whisper Turbo LPU:
+            // Dispatches on natural 250ms speech cadence pauses when buffer has >= 1.2s of speech,
+            // or when buffer accumulates full conversational sentence (~2.2s / 70,000 bytes).
+            val hasEnoughSpeech = voicedChunksInCurrentBuffer >= 3
+            val isBufferFull = currentBytes >= 70000
+            val isSpeechPaused = (now - lastSpeechTimestamp > 250) && currentBytes >= 38000
 
             if (hasEnoughSpeech && (isBufferFull || isSpeechPaused)) {
                 val pcmToDispatch = cloudAudioBuffer.toByteArray()

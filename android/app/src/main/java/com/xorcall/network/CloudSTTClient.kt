@@ -135,7 +135,7 @@ class CloudSTTClient(
                         .addFormDataPart("temperature", "0.0")
                         .addFormDataPart(
                             "prompt",
-                            "extortion, 5 lakhs, digital arrest, police custody, CBI, narcotics, MDMA, FedEx parcel, RBI escrow, kidnapping, transfer money, bail amount, murder, ICU, hospital, court order, UPI"
+                            "extortion, 5 lakhs, digital arrest, police custody, CBI, narcotics, MDMA, FedEx parcel, RBI escrow, kidnapping, transfer money, bail amount, murder, ICU, hospital, court order, UPI, Aadhaar, Crime Branch, FIR, WhatsApp call, emergency ward, lockup"
                         )
                         .build()
 

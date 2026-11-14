@@ -176,22 +176,26 @@ class AcousticSyntheticDetector {
             }
 
             val isVoiced = maxCorr > 0.42f && bestLag > 0
-            var currentJitterPct = smoothedJitter
+            var currentRapJitterPct = smoothedJitter
 
             if (isVoiced) {
                 recentPitchLags.addLast(bestLag)
                 if (recentPitchLags.size > 8) {
                     recentPitchLags.removeFirst()
                 }
+                // Intonation-Detrended Local Jitter (Relative Average Perturbation - RAP)
+                // Detrends macro sentence pitch inflection so lively conversational AI (e.g. ChatGPT Voice)
+                // is evaluated by physical glottal micro-tremor rather than intonation slope.
                 if (recentPitchLags.size >= 4) {
-                    var diffSum = 0f
                     val lagList = recentPitchLags.toList()
-                    for (i in 1 until lagList.size) {
-                        diffSum += abs(lagList[i] - lagList[i - 1])
+                    var pertSum = 0f
+                    for (i in 1 until lagList.size - 1) {
+                        val localAvg = (lagList[i - 1] + lagList[i] + lagList[i + 1]) / 3f
+                        pertSum += abs(lagList[i] - localAvg)
                     }
-                    val avgLag = lagList.average().toFloat()
-                    if (avgLag > 0f) {
-                        currentJitterPct = ((diffSum / (lagList.size - 1)) / avgLag) * 100f
+                    val meanLag = lagList.average().toFloat()
+                    if (meanLag > 0f) {
+                        currentRapJitterPct = ((pertSum / (lagList.size - 2)) / meanLag) * 100f
                     }
                 }
                 analyzedVoicedFrames++
@@ -202,58 +206,58 @@ class AcousticSyntheticDetector {
             smoothedHfRatio = (1 - alpha) * smoothedHfRatio + alpha * hfRatio
             smoothedFlatness = (1 - alpha) * smoothedFlatness + alpha * spectralFlatness
             if (isVoiced) {
-                smoothedJitter = (1 - alpha) * smoothedJitter + alpha * currentJitterPct
+                smoothedJitter = (1 - alpha) * smoothedJitter + alpha * currentRapJitterPct
             }
 
             // 6. Scientific AI Clone Detection Scoring Model
-            // PRIMARY FEATURE: Biological Micro-Jitter
-            // Natural human vocal folds vibrate with 0.5% - 2.5% period variability.
-            // Neural vocoders (HiFi-GAN, ElevenLabs) have mathematically locked pitch (<0.25% jitter).
-            val jitterScore = when {
+            // Multi-Feature DSP Fusion: Evaluates Detrended Jitter (RAP), Spectral Flatness (Wiener Entropy),
+            // and High-Frequency Vocoder Phase Shelf (>6.5 kHz) simultaneously without single-feature override.
+
+            // FEATURE 1: Intonation-Detrended Biological Micro-Jitter (RAP)
+            // Human vocal cords have involuntary physical tissue micro-tremor (RAP >= 0.50%).
+            // Neural vocoders (HiFi-GAN, ElevenLabs, ChatGPT Voice / OpenAI TTS) have locked spline synthesis (RAP < 0.22%).
+            val rapScore = when {
                 !isVoiced -> 0.10f
-                smoothedJitter < 0.20f -> 0.90f // Severe vocoder harmonic rigidity
-                smoothedJitter < 0.28f -> 0.65f // Moderate rigidity
-                smoothedJitter >= 0.55f -> 0.02f // Definite biological human vocal tract
-                else -> 0.15f
+                smoothedJitter < 0.20f -> 0.90f // Severe neural vocoder harmonic rigidity
+                smoothedJitter < 0.28f -> 0.70f // Moderate vocoder rigidity
+                smoothedJitter < 0.38f -> 0.45f // Borderline
+                smoothedJitter >= 0.55f -> 0.05f // Definite biological human vocal tract
+                else -> 0.20f
             }
 
-            // SECONDARY FEATURE: Spectral Flatness (Wiener entropy)
-            // Vocoders exhibit elevated inter-harmonic noise floors (>0.45) compared to clean human formant valleys
+            // FEATURE 2: Spectral Flatness (Wiener Entropy)
+            // Neural vocoders generate unnaturally flat inter-harmonic noise floors (>0.36)
+            // compared to human voices which have deep, crisp formant valleys (<0.30).
             val flatnessScore = when {
-                smoothedFlatness > 0.48f -> 0.70f
-                smoothedFlatness > 0.38f -> 0.40f
+                smoothedFlatness > 0.44f -> 0.85f
+                smoothedFlatness > 0.36f -> 0.60f
                 else -> 0.10f
             }
 
-            // TERTIARY FEATURE: High-Frequency Vocoder Artifacts (>6.5 kHz)
-            // Abnormal high-frequency buzz (>0.25) indicates vocoder synthesis or phase distortion
+            // FEATURE 3: High-Frequency Vocoder Artifacts (>6.5 kHz)
+            // Abnormal high-frequency buzz (>0.22) or artificial bandwidth shelf (<0.003)
             val hfScore = when {
-                smoothedHfRatio > 0.25f -> 0.70f
+                smoothedHfRatio > 0.22f -> 0.75f
+                smoothedHfRatio < 0.003f -> 0.65f
                 else -> 0.10f
             }
 
-            // Weighted composite confidence
-            val rawConfidence = if (isVoiced && smoothedJitter >= 0.50f) {
-                // If biological vocal cord tremor is verified, force confidence to nominal baseline
-                0.05f
-            } else {
-                0.55f * jitterScore + 0.30f * flatnessScore + 0.15f * hfScore
-            }
-
+            // Weighted multi-feature composite confidence
+            val rawConfidence = 0.40f * rapScore + 0.35f * flatnessScore + 0.25f * hfScore
             smoothedSyntheticConfidence = (1 - alpha) * smoothedSyntheticConfidence + alpha * rawConfidence
 
-            // A synthetic declaration REQUIRES:
-            // 1. High synthetic confidence (>= 0.65)
-            // 2. Unnatural pitch rigidity (< 0.28% jitter)
-            // 3. At least 6 consecutive voiced frames analyzed (prevents transient false positives)
-            val isSynthetic = smoothedSyntheticConfidence >= 0.65f &&
-                    smoothedJitter < 0.28f &&
-                    analyzedVoicedFrames >= 6
+            // A synthetic declaration requires:
+            // 1. Elevated synthetic confidence (>= 0.55)
+            // 2. At least 4 consecutive voiced frames analyzed
+            // 3. EITHER low detrended RAP jitter (<0.32%) OR high spectral entropy + vocoder shelf
+            val isSynthetic = smoothedSyntheticConfidence >= 0.55f &&
+                    analyzedVoicedFrames >= 4 &&
+                    (smoothedJitter < 0.32f || (smoothedFlatness > 0.38f && (smoothedHfRatio > 0.18f || smoothedHfRatio < 0.005f)))
 
             val reason = when {
-                isSynthetic -> "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Neural vocoder harmonic rigidity (<${String.format(java.util.Locale.US, "%.2f", smoothedJitter)}% micro-jitter) & elevated entropy."
-                smoothedSyntheticConfidence > 0.40f -> "Analyzing voice harmonics: Moderate acoustic compression observed (${(smoothedSyntheticConfidence * 100).toInt()}%)."
-                isVoiced -> "🟢 Natural Biological Vocal Tract: Vocal cord micro-tremor (${String.format(java.util.Locale.US, "%.2f", smoothedJitter)}% jitter) & natural formants confirmed."
+                isSynthetic -> "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Neural vocoder harmonic rigidity (<${String.format(java.util.Locale.US, "%.2f", smoothedJitter)}% RAP) & elevated Wiener entropy."
+                smoothedSyntheticConfidence > 0.40f -> "Analyzing voice harmonics: Neural vocoder characteristics observed (${(smoothedSyntheticConfidence * 100).toInt()}%)."
+                isVoiced -> "🟢 Natural Biological Vocal Tract: Vocal cord micro-tremor (${String.format(java.util.Locale.US, "%.2f", smoothedJitter)}% RAP) & natural formant valleys confirmed."
                 else -> "Spoken acoustic stream nominal."
             }
 

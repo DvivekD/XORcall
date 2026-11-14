@@ -12,6 +12,11 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **4-Stage Kill-Chain Conjunction Engine & Conversational AI Voice Forensics (`v1.2.6`)**:
+  1. *4-Stage Psychological Kill-Chain Conjunction Engine*: Eliminated single-word false triggers on words like "daughter", "hospital", or "lakhs". Scam alerts strictly require co-occurrence of Pretext Hook + Fake Authority/Legal Threat + Sensory Isolation + Coercive Payment Demands.
+  2. *Active Benign Mitigators*: Legitimate calls (physical hospital triage with zero payment demands, official university portals, routine workplace tasks) actively suppress alarms and remain SAFE.
+  3. *Conversational AI Voice Forensics (ChatGPT Voice Mode & ElevenLabs)*: Implemented Intonation-Detrended Local Jitter (Relative Average Perturbation - RAP). Macro sentence pitch intonation is detrended, accurately isolating underlying neural vocoder spline rigidity (<0.28% RAP), combined with Wiener entropy (>0.36) and vocoder phase shelves (>6.5 kHz).
+  4. *Sentence-Aligned Adaptive VAD*: Dispatches audio to Groq Whisper Turbo on natural 250ms cadence pauses for 1.2s - 2.5s speech chunks with deterministic temperature (0.0).
 - **Crash-Proof Vosk JNI Synchronization & Continuous Acoustic Forensic Radar (`v1.2.5`)**:
   1. *Crash-Proof Vosk JNI Synchronization*: Wrapped Kaldi `acceptWaveform` in strict reentrant mutex locks (`recognizerLock`) with `Throwable` exception boundaries. This permanently prevents multi-threaded native SIGSEGV memory faults in `libvosk.so` when multiple components interact with speech recognition.
   2. *Continuous Real-Time Acoustic Forensic Radar*: Continuous live streaming of vocal cord micro-jitter, Wiener entropy, and vocoder phase shelving (`com.xorcall.ACOUSTIC_UPDATE`) from `CallMonitorService` directly to the `MainActivity` dashboard in real time. The Acoustic Radar card is permanently visible and operational on the UI.

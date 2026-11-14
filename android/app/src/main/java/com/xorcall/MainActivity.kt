@@ -1927,14 +1927,14 @@ fun AcousticRadarCard(result: AcousticAnalysisResult) {
         // 3 Key Forensic Metrics
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("MICRO-JITTER", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text("DETRENDED JITTER", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = "${String.format(java.util.Locale.US, "%.2f", result.pitchJitterEstimate)}%",
                     color = if (result.pitchJitterEstimate < 0.35f && result.isVoicedSpeech) Color(0xFFF87171) else Color(0xFFE2E8F0),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("Human: 0.5-2.5%", color = Color(0xFF475569), fontSize = 7.sp)
+                Text("Human: >0.5% | AI: <0.28%", color = Color(0xFF475569), fontSize = 7.sp)
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text("HF RATIO (>6.5k)", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
