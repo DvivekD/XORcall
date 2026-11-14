@@ -90,28 +90,26 @@ class VoiceForensicsEngine:
         jitter_res = self.estimate_pitch_jitter(audio)
         jitter_pct = jitter_res["jitter_pct"]
 
-        # Scoring heuristics:
-        # Biological human speech naturally exhibits vocal cord micro-tremor (jitter >= 0.5%)
-        if jitter_res["is_voiced"] and jitter_pct >= 0.50:
-            composite_voice_score = 0.08
-            is_synthetic = False
-            indicators = []
-        else:
-            # Neural vocoder characteristics (ElevenLabs, HiFi-GAN, WaveNet)
-            jitter_score = 0.90 if (jitter_res["is_voiced"] and jitter_pct < 0.25) else (0.60 if (jitter_res["is_voiced"] and jitter_pct < 0.35) else 0.15)
-            flatness_score = 0.75 if spectral_flatness > 0.45 else 0.20
-            cutoff_score = 0.70 if high_low_ratio > 0.25 else 0.10
+        # Multi-Feature Forensic Scoring (Decoupled, no single-feature veto)
+        # Feature 1: Wiener Entropy / Spectral Flatness (diffusion/vocoder noise floor)
+        flatness_score = 0.90 if spectral_flatness > 0.35 else (0.70 if spectral_flatness > 0.27 else 0.10)
+        
+        # Feature 2: High-Frequency Vocoder Phase Shelf / Cutoff
+        cutoff_score = 0.80 if high_low_ratio < 0.007 else (0.75 if high_low_ratio > 0.18 else 0.15)
 
-            composite_voice_score = round(0.50 * jitter_score + 0.30 * flatness_score + 0.20 * cutoff_score, 2)
-            is_synthetic = composite_voice_score >= 0.58
+        # Feature 3: Pitch Micro-Jitter (when sustained voiced vowel is present)
+        jitter_score = 0.90 if (jitter_res["is_voiced"] and jitter_pct < 0.25) else (0.60 if (jitter_res["is_voiced"] and jitter_pct < 0.35) else 0.20)
 
-            indicators = []
-            if jitter_score >= 0.70:
-                indicators.append(f"Unnatural harmonic rigidity: lack of biological vocal cord micro-jitter ({jitter_pct}%)")
-            if flatness_score >= 0.70:
-                indicators.append("Unnatural acoustic spectral entropy (synthetic neural vocoder signature)")
-            if cutoff_score >= 0.70:
-                indicators.append("Vocoder high-frequency spectral buzz (>6.5 kHz anomaly)")
+        composite_voice_score = round(0.45 * flatness_score + 0.35 * cutoff_score + 0.20 * jitter_score, 2)
+        is_synthetic = composite_voice_score >= 0.52
+
+        indicators = []
+        if flatness_score >= 0.70:
+            indicators.append(f"Unnatural acoustic spectral entropy: elevated Wiener entropy ({round(spectral_flatness, 3)})")
+        if cutoff_score >= 0.70:
+            indicators.append(f"Vocoder high-frequency spectral phase cutoff/shelf ({round(high_low_ratio, 4)})")
+        if jitter_score >= 0.70:
+            indicators.append(f"Unnatural harmonic rigidity: lack of biological vocal cord micro-jitter ({jitter_pct}%)")
 
         return {
             "is_cloned_voice": is_synthetic,

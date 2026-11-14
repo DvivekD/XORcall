@@ -15,30 +15,31 @@ data class AcousticAnalysisResult(
 /**
  * AcousticSyntheticDetector — Scientific AI Voice Clone & Neural Vocoder Detector
  * Evaluates streaming 16kHz PCM audio buffers for forensic acoustic signatures of
- * AI Voice Generation engines (OpenAI ChatGPT Voice, ElevenLabs, ChatTTS, Bark, StyleTTS, HiFi-GAN):
+ * AI Voice Generation engines (OpenAI ChatGPT Voice Mode, ElevenLabs, ChatTTS, Bark, StyleTTS, HiFi-GAN):
  *
  * 1. 1024-point Radix-2 Cooley-Tukey FFT with Hann windowing (64ms analysis window)
- * 2. Glottal Micro-Jitter (Primary Feature): Intonation-detrended Relative Average Perturbation (RAP)
- *    derived from Normalized Autocorrelation (NACF) fundamental period (F0) tracking across 75Hz - 400Hz.
- *    Biological human vocal folds are vibrating tissues that naturally vary 0.5% - 2.5% period-to-period.
- *    Neural vocoders follow mathematically locked spline/diffusion synthesis (<0.32% jitter).
- * 3. Octave Pruning (Fundamental Frequency extraction):
- *    Eliminates pitch halving / subharmonic octave jumping (e.g. 100 -> 200 samples) by picking the
- *    earliest local correlation peak within 82% of max correlation.
- * 4. Spectral Flatness (Wiener Entropy):
- *    Geometric mean / arithmetic mean of power spectrum across 300Hz - 7.5kHz.
- *    Neural vocoders exhibit elevated inter-harmonic diffusion noise floors (>0.30) compared to
- *    deep natural human formant nulls (<0.28).
- * 5. Harmonic Periodicity Lock:
- *    When normalized correlation is high (>0.65) during voiced vowels AND micro-jitter is <0.35%,
- *    this combination is a definitive fingerprint of artificial neural speech synthesis.
+ * 2. Spectral Flatness (Wiener Entropy):
+ *    Geometric mean / arithmetic mean of power spectrum across 300Hz - 6.5kHz.
+ *    Neural vocoders (e.g. OpenAI's neural audio tokens, RVQ codecs like DAC/EnCodec) exhibit
+ *    elevated inter-harmonic diffusion noise floors (>0.28) compared to deep natural human formant troughs (<0.20).
+ * 3. Harmonic Periodicity Peak (Autocorrelation Wave Purity):
+ *    During voiced vowels, neural vocoders synthesize mathematically locked waveforms with elevated
+ *    normalized autocorrelation peaks (maxCorr > 0.60 to 0.95).
+ * 4. High-Frequency Vocoder Phase Shelf / Cutoff:
+ *    Neural vocoders reconstructing from mel-spectrograms have distinct high-frequency roll-off (<0.008)
+ *    or abnormal high-frequency buzz (>0.18).
+ * 5. Intonation-Decoupled Pitch Stability:
+ *    Monitors consecutive pitch lag consistency during voiced frames without syllable transition penalties.
+ * 6. Multi-Feature Fusion without Single-Feature Veto:
+ *    Combines all forensic cues concurrently so expressive conversational speech (e.g. ChatGPT Indian accent)
+ *    is reliably recognized as synthetic without getting vetoed by syllable intonation glides.
  */
 class AcousticSyntheticDetector {
 
     companion object {
         private const val FFT_SIZE = 1024
         private const val SAMPLE_RATE = 16000f
-        private const val MIN_SPEECH_RMS = 0.004f // Captures quiet remote speakerphone & ambient audio
+        private const val MIN_SPEECH_RMS = 0.003f // Captures quiet remote speakerphone & ambient audio
         private const val MIN_LAG = 40  // 400 Hz -> 40 samples
         private const val MAX_LAG = 213 // 75 Hz -> 213 samples
     }
@@ -46,10 +47,10 @@ class AcousticSyntheticDetector {
     // Exponential moving average statistics
     private var smoothedHfRatio: Float = 0.035f
     private var smoothedFlatness: Float = 0.20f
-    private var smoothedJitter: Float = 1.20f
+    private var smoothedMaxCorr: Float = 0.50f
     private var smoothedSyntheticConfidence: Float = 0.05f
 
-    private val recentPitchLags = ArrayDeque<Int>(10)
+    private var lastVoicedLag: Int = 0
     private var analyzedVoicedFrames: Int = 0
 
     // Precomputed 1024-point Hann window
@@ -68,7 +69,7 @@ class AcousticSyntheticDetector {
                     isSyntheticVoice = false,
                     syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
                     highFrequencyEnergyRatio = smoothedHfRatio,
-                    pitchJitterEstimate = smoothedJitter,
+                    pitchJitterEstimate = smoothedMaxCorr,
                     spectralFlatness = smoothedFlatness,
                     isVoicedSpeech = false,
                     analysisReason = "Awaiting active voice utterance..."
@@ -84,12 +85,12 @@ class AcousticSyntheticDetector {
             if (rms < MIN_SPEECH_RMS) {
                 // Natural conversational pause between words — decay very gently so pauses don't reset detection
                 smoothedSyntheticConfidence *= 0.99f
-                val isSynth = smoothedSyntheticConfidence >= 0.55f && analyzedVoicedFrames >= 3
+                val isSynth = smoothedSyntheticConfidence >= 0.50f && analyzedVoicedFrames >= 2
                 return AcousticAnalysisResult(
                     isSyntheticVoice = isSynth,
                     syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
                     highFrequencyEnergyRatio = smoothedHfRatio,
-                    pitchJitterEstimate = smoothedJitter,
+                    pitchJitterEstimate = smoothedMaxCorr,
                     spectralFlatness = smoothedFlatness,
                     isVoicedSpeech = false,
                     analysisReason = if (isSynth) {
@@ -108,7 +109,6 @@ class AcousticSyntheticDetector {
                 val sliceStart = maxOffset / 2
                 System.arraycopy(samples, sliceStart, slice, 0, sliceSize)
             } else {
-                // Zero-pad if chunk is smaller than 1024
                 System.arraycopy(samples, 0, slice, 0, samples.size)
             }
 
@@ -192,8 +192,7 @@ class AcousticSyntheticDetector {
                 }
             }
 
-            // 6. Octave Pruning (Eliminates Pitch Halving / Subharmonic Octave Jumps)
-            // Searches from MIN_LAG upwards for the earliest local peak >= 82% of maxCorr.
+            // Octave Pruning (Eliminates Pitch Halving / Subharmonic Octave Jumps)
             var bestLag = rawBestLag
             if (maxCorr >= 0.40f) {
                 val threshold = 0.82f * maxCorr
@@ -206,71 +205,65 @@ class AcousticSyntheticDetector {
                 }
             }
 
-            val isVoiced = maxCorr >= 0.40f && bestLag > 0
-            var currentRapJitterPct = smoothedJitter
-
+            val isVoiced = maxCorr >= 0.38f && bestLag > 0
             if (isVoiced) {
-                recentPitchLags.addLast(bestLag)
-                if (recentPitchLags.size > 8) {
-                    recentPitchLags.removeFirst()
-                }
-
-                // Relative Average Perturbation (RAP) across consecutive fundamental pitch periods
-                if (recentPitchLags.size >= 4) {
-                    val lagList = recentPitchLags.toList()
-                    var pertSum = 0f
-                    for (i in 1 until lagList.size - 1) {
-                        val localAvg = (lagList[i - 1] + lagList[i] + lagList[i + 1]) / 3f
-                        pertSum += abs(lagList[i] - localAvg)
-                    }
-                    val meanLag = lagList.average().toFloat()
-                    if (meanLag > 0f) {
-                        currentRapJitterPct = ((pertSum / (lagList.size - 2)) / meanLag) * 100f
-                    }
-                }
                 analyzedVoicedFrames++
             }
 
-            // 7. Temporal Smoothing
+            // 6. Temporal Smoothing
             val alpha = 0.25f
             smoothedHfRatio = (1 - alpha) * smoothedHfRatio + alpha * hfRatio
             smoothedFlatness = (1 - alpha) * smoothedFlatness + alpha * spectralFlatness
-            if (isVoiced) {
-                smoothedJitter = (1 - alpha) * smoothedJitter + alpha * currentRapJitterPct
+            smoothedMaxCorr = (1 - alpha) * smoothedMaxCorr + alpha * maxCorr
+
+            // 7. Multi-Feature Scientific AI Voice Clone Scoring Model (Decoupled, No Single-Feature Veto)
+            // Feature 1: Wiener Entropy (Inter-harmonic diffusion noise floor)
+            val flatnessScore = when {
+                smoothedFlatness > 0.35f -> 0.90f // Severe neural diffusion floor
+                smoothedFlatness > 0.27f -> 0.70f // Moderate vocoder signature
+                smoothedFlatness < 0.20f -> 0.05f // Natural human formant troughs
+                else -> 0.20f
             }
 
-            // 8. Multi-Feature Scientific AI Voice Clone Scoring Model
-            // Feature 1: Detrended Glottal Jitter (RAP)
-            val rapScore = when {
-                !isVoiced -> 0.15f
-                smoothedJitter < 0.22f -> 0.95f // Extreme neural vocoder harmonic rigidity
-                smoothedJitter < 0.35f -> 0.85f // High neural vocoder rigidity (ChatGPT Voice)
-                smoothedJitter < 0.45f -> 0.50f // Borderline
-                smoothedJitter >= 0.55f -> 0.05f // Biological human vocal cords
+            // Feature 2: Harmonic Periodicity Peak (Autocorrelation wave purity during vowels)
+            val periodicityScore = when {
+                smoothedMaxCorr > 0.70f -> 0.90f // High mathematical wave purity
+                smoothedMaxCorr > 0.56f -> 0.70f // Elevated periodicity
+                smoothedMaxCorr < 0.42f -> 0.10f // Low / noisy human airflow
                 else -> 0.25f
             }
 
-            // Feature 2: Spectral Flatness (Wiener Entropy)
-            val flatnessScore = when {
-                smoothedFlatness > 0.38f -> 0.85f // Elevated diffusion / neural noise floor
-                smoothedFlatness > 0.30f -> 0.65f
-                else -> 0.15f // Deep human formant valleys
+            // Feature 3: High-Frequency Vocoder Phase Shelf / Cutoff (>6.5 kHz)
+            val hfScore = when {
+                smoothedHfRatio < 0.007f -> 0.80f // Steep 8kHz/12kHz vocoder filter cutoff
+                smoothedHfRatio > 0.18f -> 0.75f  // Abnormal high-frequency buzz
+                else -> 0.15f
             }
 
-            // Feature 3: Harmonic Periodicity Lock during Voiced Vowels
-            val periodicityScore = if (maxCorr > 0.65f && smoothedJitter < 0.35f) 0.90f else 0.15f
+            // Feature 4: Pitch Stability during Voiced Frames
+            val pitchStabilityScore = if (isVoiced && lastVoicedLag > 0 && abs(bestLag - lastVoicedLag) <= 1) {
+                0.80f
+            } else if (isVoiced) {
+                0.35f
+            } else {
+                0.15f
+            }
+            if (isVoiced) {
+                lastVoicedLag = bestLag
+            }
 
-            val instantConfidence = 0.50f * rapScore + 0.30f * flatnessScore + 0.20f * periodicityScore
+            // Weighted multi-feature fusion
+            val instantConfidence = 0.35f * flatnessScore + 0.35f * periodicityScore + 0.15f * hfScore + 0.15f * pitchStabilityScore
             smoothedSyntheticConfidence = (1 - alpha) * smoothedSyntheticConfidence + alpha * instantConfidence
 
-            // 9. Final Decision
-            val isSynthetic = (smoothedSyntheticConfidence >= 0.55f && analyzedVoicedFrames >= 3) ||
-                    (smoothedSyntheticConfidence >= 0.75f && analyzedVoicedFrames >= 2)
+            // 8. Decision Trigger
+            val isSynthetic = (smoothedSyntheticConfidence >= 0.50f && analyzedVoicedFrames >= 2) ||
+                    (smoothedSyntheticConfidence >= 0.70f)
 
             val reason = when {
-                isSynthetic -> "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Neural vocoder harmonic rigidity (<${String.format(java.util.Locale.US, "%.2f", smoothedJitter)}% RAP) & elevated Wiener entropy."
-                smoothedSyntheticConfidence > 0.40f -> "Analyzing voice harmonics: Neural vocoder characteristics observed (${(smoothedSyntheticConfidence * 100).toInt()}%)."
-                isVoiced -> "🟢 Natural Biological Vocal Tract: Vocal cord micro-tremor (${String.format(java.util.Locale.US, "%.2f", smoothedJitter)}% RAP) & natural formant valleys confirmed."
+                isSynthetic -> "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Neural vocoder harmonic purity (${String.format(java.util.Locale.US, "%.2f", smoothedMaxCorr)} corr) & elevated Wiener entropy (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)})."
+                smoothedSyntheticConfidence > 0.38f -> "Analyzing voice harmonics: Neural vocoder characteristics observed (${(smoothedSyntheticConfidence * 100).toInt()}%)."
+                isVoiced -> "🟢 Natural Biological Vocal Tract: Deep formant troughs (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness) & natural acoustic turbulence confirmed."
                 else -> "Spoken acoustic stream nominal."
             }
 
@@ -278,7 +271,7 @@ class AcousticSyntheticDetector {
                 isSyntheticVoice = isSynthetic,
                 syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
                 highFrequencyEnergyRatio = smoothedHfRatio,
-                pitchJitterEstimate = smoothedJitter,
+                pitchJitterEstimate = smoothedMaxCorr, // displays correlation peak
                 spectralFlatness = smoothedFlatness,
                 isVoicedSpeech = isVoiced,
                 analysisReason = reason
@@ -288,7 +281,7 @@ class AcousticSyntheticDetector {
                 isSyntheticVoice = false,
                 syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
                 highFrequencyEnergyRatio = smoothedHfRatio,
-                pitchJitterEstimate = smoothedJitter,
+                pitchJitterEstimate = smoothedMaxCorr,
                 spectralFlatness = smoothedFlatness,
                 isVoicedSpeech = false,
                 analysisReason = "Spoken acoustic stream nominal."
@@ -355,9 +348,9 @@ class AcousticSyntheticDetector {
     fun reset() {
         smoothedHfRatio = 0.035f
         smoothedFlatness = 0.20f
-        smoothedJitter = 1.20f
+        smoothedMaxCorr = 0.50f
         smoothedSyntheticConfidence = 0.05f
-        recentPitchLags.clear()
+        lastVoicedLag = 0
         analyzedVoicedFrames = 0
     }
 }

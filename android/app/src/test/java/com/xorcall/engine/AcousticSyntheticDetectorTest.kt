@@ -25,7 +25,7 @@ class AcousticSyntheticDetectorTest {
         }
 
         assertNotNull(lastResult)
-        assertTrue("Synthetic tone must have low jitter (< 0.35%)", lastResult!!.pitchJitterEstimate < 0.35f)
+        assertTrue("Synthetic tone must have high harmonic purity (> 0.65)", lastResult!!.pitchJitterEstimate > 0.65f)
         assertTrue("Synthetic confidence must be elevated", lastResult.syntheticConfidence > 0.45f)
     }
 

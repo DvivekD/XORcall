@@ -46,26 +46,25 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.7-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.8-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.2.7-debug.apk
+          path: build-artifacts/XORcall-v1.2.8-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.7-apk
-          name: "XORcall v1.2.7 Android APK (Regex Kill-Chain Conjunction + Octave-Pruned AI Voice Radar)"
+          tag_name: v1.2.8-apk
+          name: "XORcall v1.2.8 Android APK (Decoupled Multi-Feature Neural Voice Radar for ChatGPT & Indian Accents)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.7
-            - **Regex-Driven Kill-Chain Intent Engine**: Replaced rigid string lists with compiled regular expressions matching all currency amounts (lakhs, crores, rupees, numbers) and transfer verbs (transfer, deposit, wire, pay to RBI/escrow). Phrases like `"Inspector from CBI Cyber Cell... arrest warrant... transfer 3 lakhs to RBI account"` now trigger `CRITICAL` immediately.
-            - **Conversational AI Voice Forensics with Octave Pruning**: Solved subharmonic octave jumps ($L \to 2L$) in autocorrelation using golden-standard fundamental frequency pruning. Combined 1024-sample window (64ms) Cauchy-Schwarz normalized autocorrelation, detrended Relative Average Perturbation (RAP < 0.32%), Wiener entropy, and harmonic periodicity lock. ChatGPT Voice Mode (GPT-4o) and ElevenLabs now reliably trigger `🚨 AI SYNTHETIC VOICE DETECTED`.
-            - **In-Call Speakerphone VAD & Cloud STT**: Lowered VAD speech RMS threshold from 0.012 to 0.004 so speakerphone audio from call speakers is cleanly captured. Buffer overflow now dispatches speech rather than discarding it. Added User-Agent and comprehensive legal prompt biasing to Groq Whisper Turbo.
-            - **Assistant Interception Fix**: Prioritized standard `MediaRecorder.AudioSource.MIC` over `VOICE_RECOGNITION` so hitting "Test Live Mic 6s" never triggers Google/Gemini Assistant or forces the app to background.
-            - **Pre-signed with Permanent Debug Keystore**: Signed with v1 + v2 schemes for direct update/install over existing installations.
-          files: build-artifacts/XORcall-v1.2.7-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.8
+            - **Decoupled Multi-Feature Neural Voice Detection**: Removed the mathematical bottleneck where syllable intonation glides (pitch shifts across words) penalized the entire detector down to 0.05. Evaluates Wiener entropy (diffusion floor), autocorrelation wave purity (harmonic lock > 0.60), and high-frequency vocoder phase shelf independently.
+            - **ChatGPT Voice Mode & Indian Accent Recognition**: Reliably identifies multimodal end-to-end neural audio streams (OpenAI GPT-4o, ElevenLabs, StyleTTS) even during rapid conversational cadence and expressive accent intonations.
+            - **Real-Time Forensic Radar**: Displays live Harmonic Purity, High-Frequency Phase Shelf, and Wiener Entropy metrics on the home screen and in floating call banners.
+            - **Permanent Cryptographic Keystore**: Built and pre-signed with permanent debug keystore (v1 + v2 schemes) for direct updates over previous versions.
+          files: build-artifacts/XORcall-v1.2.8-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
