@@ -360,8 +360,6 @@ class FloatingAlertOverlay(private val context: Context) {
             }
         }
     }
-        }
-    }
 
     private fun sendHeadsUpNotification(warningText: String) {
         try {
