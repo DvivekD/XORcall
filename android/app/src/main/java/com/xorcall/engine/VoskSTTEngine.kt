@@ -37,6 +37,7 @@ class VoskSTTEngine private constructor(private val context: Context) {
 
     private var model: Model? = null
     private var recognizer: Recognizer? = null
+    private val recognizerLock = Any()
 
     @Volatile
     var isReady: Boolean = false
@@ -178,28 +179,33 @@ class VoskSTTEngine private constructor(private val context: Context) {
 
     /**
      * Feeds raw PCM 16-bit mono 16kHz audio byte buffers into Vosk.
+     * Synchronized on recognizerLock to prevent concurrent multi-threaded JNI calls
+     * which trigger native SIGSEGV crashes in libvosk.so.
      */
     fun acceptWaveform(pcmBytes: ByteArray, length: Int) {
         if (!isReady || recognizer == null) return
 
-        try {
-            val isFinal = recognizer!!.acceptWaveForm(pcmBytes, length)
+        synchronized(recognizerLock) {
+            try {
+                val rec = recognizer ?: return
+                val isFinal = rec.acceptWaveForm(pcmBytes, length)
 
-            if (isFinal) {
-                val resultJson = recognizer!!.result
-                val text = parseVoskText(resultJson)
-                if (text.isNotBlank()) {
-                    notifyTranscript(text, true)
+                if (isFinal) {
+                    val resultJson = rec.result
+                    val text = parseVoskText(resultJson)
+                    if (text.isNotBlank()) {
+                        notifyTranscript(text, true)
+                    }
+                } else {
+                    val partialJson = rec.partialResult
+                    val text = parseVoskPartial(partialJson)
+                    if (text.isNotBlank()) {
+                        notifyTranscript(text, false)
+                    }
                 }
-            } else {
-                val partialJson = recognizer!!.partialResult
-                val text = parseVoskPartial(partialJson)
-                if (text.isNotBlank()) {
-                    notifyTranscript(text, false)
-                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Vosk acceptWaveform error", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Vosk acceptWaveform error", e)
         }
     }
 
@@ -207,7 +213,7 @@ class VoskSTTEngine private constructor(private val context: Context) {
         for (listener in transcriptListeners) {
             try {
                 listener.invoke(text, isFinal)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e(TAG, "Transcript listener error", e)
             }
         }
@@ -245,12 +251,14 @@ class VoskSTTEngine private constructor(private val context: Context) {
     }
 
     fun release() {
-        try {
-            recognizer?.close()
-            model?.close()
-        } catch (_: Exception) {}
-        recognizer = null
-        model = null
-        isReady = false
+        synchronized(recognizerLock) {
+            try {
+                recognizer?.close()
+                model?.close()
+            } catch (_: Throwable) {}
+            recognizer = null
+            model = null
+            isReady = false
+        }
     }
 }

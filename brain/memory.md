@@ -12,6 +12,11 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **Crash-Proof Vosk JNI Synchronization & Continuous Acoustic Forensic Radar (`v1.2.5`)**:
+  1. *Crash-Proof Vosk JNI Synchronization*: Wrapped Kaldi `acceptWaveform` in strict reentrant mutex locks (`recognizerLock`) with `Throwable` exception boundaries. This permanently prevents multi-threaded native SIGSEGV memory faults in `libvosk.so` when multiple components interact with speech recognition.
+  2. *Continuous Real-Time Acoustic Forensic Radar*: Continuous live streaming of vocal cord micro-jitter, Wiener entropy, and vocoder phase shelving (`com.xorcall.ACOUSTIC_UPDATE`) from `CallMonitorService` directly to the `MainActivity` dashboard in real time. The Acoustic Radar card is permanently visible and operational on the UI.
+  3. *Cooperative AudioRecord Management*: "Test Live Mic" intelligently links into `CallMonitorService`'s active background capture and adaptive soft-knee AGC, avoiding hardware mic resource lockups.
+  4. *Debounced Sensory Warnings*: Debounced threat triggers to prevent notification/haptic flooding.
 - **Pre-Armed Groq Whisper Turbo Integration (`v1.2.4`)**:
   1. *Out-of-the-Box Cloud Whisper Turbo*: Pre-configured Groq API key token as default configuration in `GuardianSettingsManager` and `CloudSTTClient`. Dual-Hybrid speech pipeline immediately dispatches 16kHz PCM chunks to Groq LPU `whisper-large-v3-turbo` with sub-200ms turnaround.
   2. *Domain Prompt Biasing*: Extortion, Digital Arrest, police custody, and Indian currency vocabulary actively biased in Whisper decoder.

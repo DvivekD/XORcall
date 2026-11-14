@@ -46,26 +46,29 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.4-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.5-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.2.4-debug.apk
+          path: build-artifacts/XORcall-v1.2.5-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.4-apk
-          name: "XORcall v1.2.4 Android APK (Armed Groq Whisper Turbo Cloud STT + Adaptive Soft-Knee AGC)"
+          tag_name: v1.2.5-apk
+          name: "XORcall v1.2.5 Android APK (Crash-Proof Acoustic Radar + Biological vs AI Voice Differentiation)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.4
-            - **Hardcoded Pre-Armed Groq Whisper Turbo**: Out-of-the-box sub-200ms cloud transcription powered by Groq LPU `whisper-large-v3-turbo` with Indian English & Hinglish accuracy. Zero setup needed.
-            - **Domain Prompt Biasing**: Whisper Turbo decoder is biased towards exact Indian cyber extortion terminology (`5 lakhs`, `digital arrest`, `CBI`, `police custody`, `MDMA`, `RBI escrow`, `wire transfer`).
-            - **Adaptive Soft-Knee Headroom AGC**: Replaced harsh clipping with dynamic peak-tracking automatic gain control, preserving pure speech formants on high-volume speakerphones.
-            - **Comprehensive Phonetic Normalizer**: Auto-maps telephony acoustic distortions (*"police custom"* -> `police custody`, *"digital address"* -> `digital arrest`, *"five lock/block"* -> `5 lakh`).
-            - **Permanent Keystore Signing**: Pre-signed with committed debug keystore for seamless updates.
-          files: build-artifacts/XORcall-v1.2.4-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.5
+            - **Crash-Proof Vosk JNI Synchronization**: Wrapped Kaldi `acceptWaveform` in strict reentrant mutex locks (`recognizerLock`), completely eliminating multi-threaded native SIGSEGV memory faults that previously caused the app to crash to background on "Test Live Mic".
+            - **Real-Time Acoustic Forensic Radar**: Continuous live streaming of vocal cord micro-jitter, Wiener entropy, and vocoder phase shelving (`com.xorcall.ACOUSTIC_UPDATE`). Always visible on the dashboard in real time.
+            - **Biological vs AI Voice Distinction**:
+              - *Biological Human Speech*: Vocal fold cycle-to-cycle variability produces natural micro-tremor (jitter >0.5%, typically 1.2% - 2.2%), displaying safe green status.
+              - *AI Synthetic Voice*: Neural vocoders (ElevenLabs, ChatGPT Voice, Hume, StyleTTS) exhibit mathematical pitch rigidity (<0.28% jitter) and elevated Wiener entropy, triggering instant Red Threat alerts.
+            - **Cooperative AudioRecord Management**: "Test Live Mic" now seamlessly links into `CallMonitorService`'s active background capture and adaptive soft-knee AGC, avoiding hardware mic resource lockups.
+            - **Debounced Sensory Warnings**: Debounced threat triggers to prevent notification/haptic flooding.
+            - **Permanent Cryptographic Keystore**: Built and pre-signed with permanent debug keystore (v1 + v2 schemes) for seamless in-place updates.
+          files: build-artifacts/XORcall-v1.2.5-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

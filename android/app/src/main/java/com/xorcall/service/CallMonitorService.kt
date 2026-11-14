@@ -46,6 +46,9 @@ class CallMonitorService : Service(), TelemetryListener {
     companion object {
         private const val TAG = "CallMonitorService"
         const val ACTION_TOGGLE_SPEAKER = "com.xorcall.TOGGLE_SPEAKERPHONE"
+
+        @Volatile
+        var isServiceRunning = false
     }
 
     private val CHANNEL_ID = "XORcall_Guardian_Channel"
@@ -89,6 +92,7 @@ class CallMonitorService : Service(), TelemetryListener {
 
     override fun onCreate() {
         super.onCreate()
+        isServiceRunning = true
         try {
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             settingsManager = GuardianSettingsManager(this)
@@ -111,6 +115,19 @@ class CallMonitorService : Service(), TelemetryListener {
             }
 
             sttManager.onAcousticResult = { result ->
+                // Always broadcast real-time acoustic metrics to UI for Biological vs AI Voice differentiation
+                val acousticIntent = Intent("com.xorcall.ACOUSTIC_UPDATE").apply {
+                    putExtra("isSynthetic", result.isSyntheticVoice)
+                    putExtra("confidence", result.syntheticConfidence)
+                    putExtra("hfRatio", result.highFrequencyEnergyRatio)
+                    putExtra("jitter", result.pitchJitterEstimate)
+                    putExtra("flatness", result.spectralFlatness)
+                    putExtra("isVoiced", result.isVoicedSpeech)
+                    putExtra("reason", result.analysisReason)
+                    setPackage(packageName)
+                }
+                sendBroadcast(acousticIntent)
+
                 if (result.isSyntheticVoice && settingsManager.isAiVoiceDetectionArmed) {
                     val aiIntent = Intent("com.xorcall.AI_VOICE_ALERT").apply {
                         putExtra("confidence", result.syntheticConfidence)
@@ -220,7 +237,14 @@ class CallMonitorService : Service(), TelemetryListener {
         }
     }
 
+    private var lastThreatAlertTime = 0L
+
     private fun handleThreatDetected(analysis: ThreatAnalysis, transcript: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastThreatAlertTime < 2500L) {
+            return
+        }
+        lastThreatAlertTime = now
         // 1. Hardware Sensory Shockwave
         if (settingsManager.isHapticsEnabled) {
             hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
@@ -556,6 +580,7 @@ class CallMonitorService : Service(), TelemetryListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        isServiceRunning = false
         try {
             unregisterReceiver(settingsReceiver)
         } catch (_: Exception) {}

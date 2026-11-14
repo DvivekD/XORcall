@@ -255,6 +255,8 @@ fun MainScreen(
         }
     }
 
+    var lastThreatAlertTime by remember { mutableStateOf(0L) }
+
     fun startDirectMicTest() {
         val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (!hasMic) {
@@ -263,7 +265,25 @@ fun MainScreen(
         }
         if (isMicTesting) return
         isMicTesting = true
-        liveTranscript = "🔴 RECORDING LIVE MIC: Speak extortion threat into mic now..."
+        liveTranscript = "🔴 RECORDING LIVE MIC (6s): Speak now (human voice or play AI audio)..."
+
+        if (CallMonitorService.isServiceRunning) {
+            // CallMonitorService is already capturing the microphone in the foreground service with Adaptive AGC!
+            // Do NOT create a conflicting second AudioRecord; simply let CallMonitorService stream audio to STT and Acoustic Radar.
+            coroutineScope.launch {
+                try {
+                    delay(6000L)
+                } finally {
+                    isMicTesting = false
+                    if (liveTranscript.startsWith("🔴 RECORDING")) {
+                        liveTranscript = "Ready. Spoken words and acoustic forensics displayed above."
+                    }
+                }
+            }
+            return
+        }
+
+        // Standalone fallback when Shield service is paused/stopped:
         coroutineScope.launch(Dispatchers.IO) {
             val sampleRate = 16000
             val channelConfig = AudioFormat.CHANNEL_IN_MONO
@@ -285,7 +305,7 @@ fun MainScreen(
                         } else {
                             rec.release()
                         }
-                    } catch (_: Exception) {}
+                    } catch (_: Throwable) {}
                 }
 
                 if (recorder != null && recorder.state == AudioRecord.STATE_INITIALIZED) {
@@ -332,7 +352,7 @@ fun MainScreen(
                         Toast.makeText(context, "Audio recorder busy or active in background.", Toast.LENGTH_SHORT).show()
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "Mic test error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -341,7 +361,7 @@ fun MainScreen(
                 try {
                     recorder?.stop()
                     recorder?.release()
-                } catch (_: Exception) {}
+                } catch (_: Throwable) {}
                 withContext(Dispatchers.Main) {
                     isMicTesting = false
                     liveAudioRms = 0f
@@ -353,26 +373,30 @@ fun MainScreen(
     // Set threat detection callback on STT engine
     LaunchedEffect(sttManager, activeVector, isHapticsEnabled, isBannerEnabled, isAudioWhisperEnabled, isFamilyPingEnabled) {
         sttManager.onThreatDetected = { analysis, transcript ->
+            val now = System.currentTimeMillis()
             coroutineScope.launch(Dispatchers.Main) {
                 riskLevel = analysis.riskLevel
                 lastThreatMessage = analysis.warningMessage
-                if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
-                if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
-                if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
-                if (isFamilyPingEnabled) {
-                    guardianPingManager.sendSilentGuardianPing("Live Spoken Words", analysis.warningMessage, analysis.demographicVector)
+                if (now - lastThreatAlertTime > 2500L) {
+                    lastThreatAlertTime = now
+                    if (isHapticsEnabled) hapticEngine.triggerImmediateShockwave(analysis.riskLevel)
+                    if (isBannerEnabled) floatingOverlay.showCriticalAlert(analysis.warningMessage)
+                    if (isAudioWhisperEnabled) whisperEngine.speakWarning(analysis.warningMessage)
+                    if (isFamilyPingEnabled) {
+                        guardianPingManager.sendSilentGuardianPing("Live Spoken Words", analysis.warningMessage, analysis.demographicVector)
+                    }
+                    historyManager.recordCall(
+                        callerNumber = "Live Spoken Words",
+                        callerClassification = "SPOKEN_WORDS",
+                        vector = analysis.demographicVector,
+                        risk = analysis.riskLevel,
+                        isSynthetic = analysis.isSyntheticVoice,
+                        syntheticConfidence = analysis.syntheticConfidence,
+                        keywords = analysis.matchedKeywords,
+                        transcript = transcript
+                    )
+                    refreshHistory()
                 }
-                historyManager.recordCall(
-                    callerNumber = "Live Spoken Words",
-                    callerClassification = "SPOKEN_WORDS",
-                    vector = analysis.demographicVector,
-                    risk = analysis.riskLevel,
-                    isSynthetic = analysis.isSyntheticVoice,
-                    syntheticConfidence = analysis.syntheticConfidence,
-                    keywords = analysis.matchedKeywords,
-                    transcript = transcript
-                )
-                refreshHistory()
             }
         }
     }
@@ -384,7 +408,9 @@ fun MainScreen(
             if (hasMic) {
                 sttManager.startAlwaysOnLiveListening { text, _ ->
                     if (text.isNotBlank()) {
-                        liveTranscript = "“$text”"
+                        coroutineScope.launch(Dispatchers.Main) {
+                            liveTranscript = "“$text”"
+                        }
                     }
                 }
             }
@@ -434,6 +460,27 @@ fun MainScreen(
                         val reason = intent.getStringExtra("reason") ?: "Synthetic Neural Vocoder Detected"
                         lastAiVoiceStatus = reason
                     }
+                    "com.xorcall.ACOUSTIC_UPDATE" -> {
+                        val isSynthetic = intent.getBooleanExtra("isSynthetic", false)
+                        val confidence = intent.getFloatExtra("confidence", 0f)
+                        val hfRatio = intent.getFloatExtra("hfRatio", 0.035f)
+                        val jitter = intent.getFloatExtra("jitter", 1.20f)
+                        val flatness = intent.getFloatExtra("flatness", 0.20f)
+                        val isVoiced = intent.getBooleanExtra("isVoiced", false)
+                        val reason = intent.getStringExtra("reason") ?: "Spoken acoustic stream nominal."
+                        latestAcousticResult = AcousticAnalysisResult(
+                            isSyntheticVoice = isSynthetic,
+                            syntheticConfidence = confidence,
+                            highFrequencyEnergyRatio = hfRatio,
+                            pitchJitterEstimate = jitter,
+                            spectralFlatness = flatness,
+                            isVoicedSpeech = isVoiced,
+                            analysisReason = reason
+                        )
+                        if (isSynthetic) {
+                            lastAiVoiceStatus = reason
+                        }
+                    }
                     "com.xorcall.WHITELIST_CALL" -> {
                         val entity = intent.getStringExtra("entity") ?: "Trusted Contact"
                         val number = intent.getStringExtra("number") ?: ""
@@ -448,6 +495,7 @@ fun MainScreen(
             addAction("com.xorcall.AUDIO_STREAM_ACTIVE")
             addAction("com.xorcall.ACCESSIBILITY_STATE_CHANGED")
             addAction("com.xorcall.AI_VOICE_ALERT")
+            addAction("com.xorcall.ACOUSTIC_UPDATE")
             addAction("com.xorcall.WHITELIST_CALL")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -656,6 +704,15 @@ fun MainScreen(
                         val sample = "Papa! I had an accident on the highway, doctor says leg fractured, police putting me in lockup! Inspector wants ₹50,000 bail money right now!"
                         liveTranscript = "“$sample”"
                         lastAiVoiceStatus = "⚠️ Neural Vocoder High-Frequency Roll-Off Detected (94% AI Clone Confidence)"
+                        latestAcousticResult = AcousticAnalysisResult(
+                            isSyntheticVoice = true,
+                            syntheticConfidence = 0.94f,
+                            highFrequencyEnergyRatio = 0.0031f,
+                            pitchJitterEstimate = 0.16f,
+                            spectralFlatness = 0.495f,
+                            isVoicedSpeech = true,
+                            analysisReason = "🚨 AI SYNTHETIC VOICE DETECTED (94%): Neural vocoder harmonic rigidity (<0.16% micro-jitter) & elevated entropy."
+                        )
                         val analysis = ThreatAnalysis(
                             isScamDetected = true,
                             matchedKeywords = listOf("accident", "hospital", "bail", "lockup", "AI_SYNTHETIC_VOICE"),
@@ -682,6 +739,7 @@ fun MainScreen(
                         riskLevel = RiskLevel.SAFE
                         lastThreatMessage = null
                         lastAiVoiceStatus = null
+                        latestAcousticResult = null
                         floatingOverlay.dismiss()
                     }
                 )
@@ -1154,10 +1212,17 @@ fun DemographicThreatTesterCard(
             }
         }
 
-        if (acousticResult != null) {
-            Spacer(modifier = Modifier.height(8.dp))
-            AcousticRadarCard(acousticResult)
-        }
+        val displayedAcoustic = acousticResult ?: AcousticAnalysisResult(
+            isSyntheticVoice = false,
+            syntheticConfidence = 0.05f,
+            highFrequencyEnergyRatio = 0.035f,
+            pitchJitterEstimate = 1.20f,
+            spectralFlatness = 0.20f,
+            isVoicedSpeech = false,
+            analysisReason = "Ready to analyze voice acoustics. Speak into mic or on call to differentiate Biological vs AI Voice."
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        AcousticRadarCard(displayedAcoustic)
 
         Spacer(modifier = Modifier.height(10.dp))
 

@@ -26,7 +26,7 @@ import com.xorcall.MainActivity
  */
 class FloatingAlertOverlay(private val context: Context) {
 
-    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val windowManager = (context.applicationContext ?: context).getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var overlayView: View? = null
 
     private val ALERT_CHANNEL_ID = "XORcall_Critical_Alerts"
@@ -79,8 +79,6 @@ class FloatingAlertOverlay(private val context: Context) {
                     WindowManager.LayoutParams.WRAP_CONTENT,
                     layoutParamsType,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
                             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
                     PixelFormat.TRANSLUCENT
                 ).apply {
