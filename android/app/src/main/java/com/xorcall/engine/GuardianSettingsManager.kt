@@ -88,7 +88,7 @@ class GuardianSettingsManager(private val context: Context) {
         }
 
     var isAiVoiceDetectionArmed: Boolean
-        get() = prefs.getBoolean(KEY_AI_VOICE_DETECTION, true)
+        get() = prefs.getBoolean(KEY_AI_VOICE_DETECTION, false)
         set(value) {
             prefs.edit().putBoolean(KEY_AI_VOICE_DETECTION, value).apply()
             notifyChange()

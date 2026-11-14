@@ -12,8 +12,8 @@ android {
         applicationId = "com.xorcall"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.2.8"
+        versionCode = 21
+        versionName = "1.2.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

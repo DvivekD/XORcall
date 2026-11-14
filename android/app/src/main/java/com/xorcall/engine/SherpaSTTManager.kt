@@ -45,6 +45,7 @@ class SherpaSTTManager(
     val errorMessage: String? get() = voskEngine?.errorMessage
 
     var activeScope: DemographicVector = DemographicVector.ALL
+    var isAiVoiceArmed: Boolean = false
     var onThreatDetected: ((analysis: ThreatAnalysis, transcript: String) -> Unit)? = null
     var onAcousticResult: ((result: AcousticAnalysisResult) -> Unit)? = null
     var onLiveTranscriptUpdate: ((transcript: String, isEndpoint: Boolean) -> Unit)? = null
@@ -137,21 +138,6 @@ class SherpaSTTManager(
         latestAcousticResult = acousticResult
         onAcousticResult?.invoke(acousticResult)
 
-        if (acousticResult.isSyntheticVoice) {
-            val alertText = acousticResult.analysisReason
-            val analysis = ThreatAnalysis(
-                isScamDetected = true,
-                matchedKeywords = listOf("AI_VOICE_CLONE"),
-                riskLevel = RiskLevel.CRITICAL,
-                warningMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE CLONE DETECTED! Voice is artificially generated.",
-                demographicVector = activeScope,
-                isSyntheticVoice = true,
-                syntheticConfidence = acousticResult.syntheticConfidence,
-                normalizedTranscript = alertText
-            )
-            onThreatDetected?.invoke(analysis, alertText)
-        }
-
         // 3. Cloud STT Audio Chunk Accumulation
         // Convert shorts to bytes
         val byteChunk = ByteArray(count * 2)
@@ -215,21 +201,11 @@ class SherpaSTTManager(
         val acousticResult = syntheticDetector.analyzeAudioChunk(samples)
         latestAcousticResult = acousticResult
         onAcousticResult?.invoke(acousticResult)
+    }
 
-        if (acousticResult.isSyntheticVoice) {
-            val alertText = acousticResult.analysisReason
-            val analysis = ThreatAnalysis(
-                isScamDetected = true,
-                matchedKeywords = listOf("AI_VOICE_CLONE"),
-                riskLevel = RiskLevel.CRITICAL,
-                warningMessage = "🚨 CRITICAL: AI SYNTHETIC VOICE DETECTED! Voice is artificially generated.",
-                demographicVector = activeScope,
-                isSyntheticVoice = true,
-                syntheticConfidence = acousticResult.syntheticConfidence,
-                normalizedTranscript = alertText
-            )
-            onThreatDetected?.invoke(analysis, alertText)
-        }
+    fun resetAcousticRadar() {
+        syntheticDetector.reset()
+        latestAcousticResult = null
     }
 
     fun startAlwaysOnLiveListening(onTranscript: (text: String, isEndpoint: Boolean) -> Unit) {
@@ -245,21 +221,22 @@ class SherpaSTTManager(
 
     /**
      * Evaluates text against DemographicThreatLexicon and current AI synthetic voice status.
+     * Guaranteed: Safe conversational speech (RiskLevel.SAFE) strictly remains RiskLevel.SAFE.
      */
     fun analyzeText(text: String, scope: DemographicVector = activeScope): ThreatAnalysis {
         val result = DemographicThreatLexicon.evaluate(text, scope)
         val isAiVoice = latestAcousticResult?.isSyntheticVoice ?: false
         val aiConfidence = latestAcousticResult?.syntheticConfidence ?: 0f
 
-        val effectiveRisk = if (isAiVoice && result.riskLevel == RiskLevel.SAFE) {
-            RiskLevel.CRITICAL
-        } else if (result.riskLevel != RiskLevel.SAFE) {
+        // A conversation with normal, safe text is ALWAYS RiskLevel.SAFE.
+        // We only escalate if a scam/threat intent was detected.
+        val effectiveRisk = if (result.riskLevel != RiskLevel.SAFE) {
             RiskLevel.CRITICAL
         } else {
-            result.riskLevel
+            RiskLevel.SAFE
         }
 
-        val enrichedMessage = if (isAiVoice) {
+        val enrichedMessage = if (isAiVoice && isAiVoiceArmed) {
             "${result.threatSummary} [AI SYNTHETIC VOICE DETECTED (${(aiConfidence * 100).toInt()}%)]"
         } else {
             result.threatSummary
@@ -271,7 +248,7 @@ class SherpaSTTManager(
             riskLevel = effectiveRisk,
             warningMessage = enrichedMessage,
             demographicVector = result.matchedVector,
-            isSyntheticVoice = isAiVoice,
+            isSyntheticVoice = isAiVoice && isAiVoiceArmed,
             syntheticConfidence = aiConfidence,
             normalizedTranscript = text
         )

@@ -109,6 +109,7 @@ class CallMonitorService : Service(), TelemetryListener {
             sttManager.initialize()
             sttManager.initializeVosk(scope)
             sttManager.activeScope = settingsManager.activeVector
+            sttManager.isAiVoiceArmed = settingsManager.isAiVoiceDetectionArmed
 
             sttManager.onThreatDetected = { analysis, transcript ->
                 handleThreatDetected(analysis, transcript)
@@ -186,6 +187,7 @@ class CallMonitorService : Service(), TelemetryListener {
     private fun reloadSettings() {
         hapticEngine.isHapticsEnabled = settingsManager.isHapticsEnabled
         sttManager.activeScope = settingsManager.activeVector
+        sttManager.isAiVoiceArmed = settingsManager.isAiVoiceDetectionArmed
         sttManager.updateCloudConfig(settingsManager.groqApiKey, settingsManager.backendUrl)
     }
 

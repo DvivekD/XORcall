@@ -151,6 +151,7 @@ fun MainScreen(
         SherpaSTTManager(context.assets, context).apply { 
             initialize() 
             activeScope = settingsManager.activeVector
+            isAiVoiceArmed = settingsManager.isAiVoiceDetectionArmed
         } 
     }
 
@@ -197,6 +198,7 @@ fun MainScreen(
     var isVoskReady by remember { mutableStateOf(sttManager.isVoskReady) }
     var isUnpacking by remember { mutableStateOf(sttManager.isUnpacking) }
     var isMicTesting by remember { mutableStateOf(false) }
+    var isAiForensicTesting by remember { mutableStateOf(false) }
     var liveAudioRms by remember { mutableStateOf(0f) }
     var liveAudioSource by remember { mutableStateOf("Standby") }
     var voskErrorMessage by remember { mutableStateOf(sttManager.errorMessage) }
@@ -263,20 +265,20 @@ fun MainScreen(
             Toast.makeText(context, "Please grant microphone permission first", Toast.LENGTH_SHORT).show()
             return
         }
-        if (isMicTesting) return
+        if (isMicTesting || isAiForensicTesting) return
         isMicTesting = true
-        liveTranscript = "🔴 RECORDING LIVE MIC (6s): Speak now (human voice or play AI audio)..."
+        liveTranscript = "🔴 RECORDING LIVE MIC (6s): Speak naturally now..."
 
         if (CallMonitorService.isServiceRunning) {
             // CallMonitorService is already capturing the microphone in the foreground service with Adaptive AGC!
-            // Do NOT create a conflicting second AudioRecord; simply let CallMonitorService stream audio to STT and Acoustic Radar.
+            // Do NOT create a conflicting second AudioRecord; simply let CallMonitorService stream audio to STT.
             coroutineScope.launch {
                 try {
                     delay(6000L)
                 } finally {
                     isMicTesting = false
                     if (liveTranscript.startsWith("🔴 RECORDING")) {
-                        liveTranscript = "Ready. Spoken words and acoustic forensics displayed above."
+                        liveTranscript = "Ready. Spoken words transcribed above."
                     }
                 }
             }
@@ -291,24 +293,10 @@ fun MainScreen(
             val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096)
             var recorder: AudioRecord? = null
             try {
-                // Try standard MIC first to avoid triggering system Google/Gemini Assistant popups
-                val sources = intArrayOf(
-                    MediaRecorder.AudioSource.MIC,
-                    MediaRecorder.AudioSource.VOICE_RECOGNITION
-                )
-                for (src in sources) {
-                    try {
-                        val rec = AudioRecord(src, sampleRate, channelConfig, audioFormat, minBuf)
-                        if (rec.state == AudioRecord.STATE_INITIALIZED) {
-                            recorder = rec
-                            break
-                        } else {
-                            rec.release()
-                        }
-                    } catch (_: Throwable) {}
-                }
-
-                if (recorder != null && recorder.state == AudioRecord.STATE_INITIALIZED) {
+                // Use standard AudioSource.MIC exclusively to prevent Android system Assistant interruptions
+                val rec = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, minBuf)
+                if (rec.state == AudioRecord.STATE_INITIALIZED) {
+                    recorder = rec
                     recorder.startRecording()
                     val pcmBuffer = ShortArray(minBuf / 2)
                     val boostedBuffer = ShortArray(minBuf / 2)
@@ -340,7 +328,7 @@ fun MainScreen(
                                 lastUiUpdate = now
                                 withContext(Dispatchers.Main) {
                                     liveAudioRms = rms
-                                    liveAudioSource = "Live Mic Test"
+                                    liveAudioSource = "Live Mic Speech"
                                 }
                             }
                             sttManager.acceptAudioChunkRaw(boostedBuffer, read)
@@ -365,6 +353,80 @@ fun MainScreen(
                 withContext(Dispatchers.Main) {
                     isMicTesting = false
                     liveAudioRms = 0f
+                }
+            }
+        }
+    }
+
+    fun startAiForensicRadarTest() {
+        val hasMic = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (!hasMic) {
+            Toast.makeText(context, "Please grant microphone permission first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (isMicTesting || isAiForensicTesting) return
+        isAiForensicTesting = true
+        sttManager.resetAcousticRadar()
+        lastAiVoiceStatus = "🧠 SCANNING VOICE HARMONICS (6s): Analyzing vocal tract formant troughs & vocoder Wiener entropy..."
+
+        coroutineScope.launch {
+            try {
+                if (CallMonitorService.isServiceRunning) {
+                    delay(6000L)
+                } else {
+                    withContext(Dispatchers.IO) {
+                        val sampleRate = 16000
+                        val channelConfig = AudioFormat.CHANNEL_IN_MONO
+                        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+                        val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096)
+                        var recorder: AudioRecord? = null
+                        try {
+                            val rec = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, minBuf)
+                            if (rec.state == AudioRecord.STATE_INITIALIZED) {
+                                recorder = rec
+                                recorder.startRecording()
+                                val pcmBuffer = ShortArray(minBuf / 2)
+                                val endAt = System.currentTimeMillis() + 6000L
+                                var lastUiUpdate = 0L
+                                while (System.currentTimeMillis() < endAt && isAiForensicTesting) {
+                                    val read = recorder.read(pcmBuffer, 0, pcmBuffer.size)
+                                    if (read > 0) {
+                                        var sumSquares = 0.0
+                                        for (i in 0 until read) {
+                                            val s = pcmBuffer[i].toDouble()
+                                            sumSquares += s * s
+                                        }
+                                        val rms = (kotlin.math.sqrt(sumSquares / read) / 32768.0).toFloat()
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastUiUpdate > 80) {
+                                            lastUiUpdate = now
+                                            withContext(Dispatchers.Main) {
+                                                liveAudioRms = rms
+                                                liveAudioSource = "AI Forensic Scan"
+                                            }
+                                        }
+                                        sttManager.acceptAudioChunkRaw(pcmBuffer, read)
+                                    }
+                                }
+                            }
+                        } finally {
+                            try {
+                                recorder?.stop()
+                                recorder?.release()
+                            } catch (_: Throwable) {}
+                        }
+                    }
+                }
+            } finally {
+                isAiForensicTesting = false
+                liveAudioRms = 0f
+                val finalRes = latestAcousticResult
+                if (finalRes != null && finalRes.isSyntheticVoice) {
+                    lastAiVoiceStatus = finalRes.analysisReason
+                } else if (finalRes != null && finalRes.isVoicedSpeech) {
+                    lastAiVoiceStatus = "🟢 BIOLOGICAL HUMAN VOICE CONFIRMED (${(finalRes.syntheticConfidence * 100).toInt()}%): Natural vocal tract formant troughs (${String.format(java.util.Locale.US, "%.3f", finalRes.spectralFlatness)} flatness) confirmed."
+                } else {
+                    lastAiVoiceStatus = "🟢 Acoustic stream nominal. No synthetic vocoder artifacts detected."
                 }
             }
         }
@@ -641,6 +703,7 @@ fun MainScreen(
                     onToggleAiVoice = {
                         isAiVoiceDetectionArmed = it
                         settingsManager.isAiVoiceDetectionArmed = it
+                        sttManager.isAiVoiceArmed = it
                     },
                     autoSpeakerphone = isAutoSpeakerphoneEnabled,
                     onToggleAutoSpeakerphone = {
@@ -659,9 +722,11 @@ fun MainScreen(
                     acousticResult = latestAcousticResult,
                     isLiveTranscribing = isShieldActive,
                     isMicTesting = isMicTesting,
+                    isAiForensicTesting = isAiForensicTesting,
                     audioRms = liveAudioRms,
                     audioSource = liveAudioSource,
                     onStartMicTest = { startDirectMicTest() },
+                    onStartAiForensicTest = { startAiForensicRadarTest() },
                     onOpenCustomInjector = {
                         showCustomInjectorDialog = true
                     },
@@ -1110,9 +1175,11 @@ fun DemographicThreatTesterCard(
     acousticResult: AcousticAnalysisResult? = null,
     isLiveTranscribing: Boolean,
     isMicTesting: Boolean = false,
+    isAiForensicTesting: Boolean = false,
     audioRms: Float = 0f,
     audioSource: String = "Direct Line",
     onStartMicTest: () -> Unit = {},
+    onStartAiForensicTest: () -> Unit = {},
     onOpenCustomInjector: () -> Unit,
     onTriggerKidnap5Lakhs: () -> Unit,
     onTriggerUniversalExtortion: () -> Unit,
@@ -1226,7 +1293,7 @@ fun DemographicThreatTesterCard(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Direct Live Mic Test Button
+        // 1. Direct Live Mic Speech Recognition Button
         Button(
             onClick = onStartMicTest,
             modifier = Modifier.fillMaxWidth(),
@@ -1236,7 +1303,26 @@ fun DemographicThreatTesterCard(
             shape = RoundedCornerShape(8.dp)
         ) {
             Text(
-                text = if (isMicTesting) "🔴 RECORDING MIC... (SPEAK THREAT NOW!)" else "🎙️ TEST LIVE MIC (6s SPEAK TEST)",
+                text = if (isMicTesting) "🔴 RECORDING MIC... (SPEAK FREELY TO TRANSCRIBE)" else "🎙️ TEST LIVE MIC (6s SPEECH RECOGNITION)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                color = Color.White
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 2. Dedicated AI Voice Radar Forensic Scan (Acoustic Harmonics & Clone Detection)
+        Button(
+            onClick = onStartAiForensicTest,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isAiForensicTesting) Color(0xFFDC2626) else Color(0xFF7C3AED)
+            ),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Text(
+                text = if (isAiForensicTesting) "🧠 SCANNING HARMONICS... (SPEAK / PLAY AI AUDIO)" else "🤖 TEST AI VOICE RADAR (6s FORENSIC SCAN)",
                 fontWeight = FontWeight.Bold,
                 fontSize = 11.sp,
                 color = Color.White
@@ -1930,31 +2016,31 @@ fun AcousticRadarCard(result: AcousticAnalysisResult) {
                 Text("HARMONIC PURITY", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = String.format(java.util.Locale.US, "%.2f", result.pitchJitterEstimate),
-                    color = if (result.pitchJitterEstimate > 0.65f && result.isVoicedSpeech) Color(0xFFF87171) else Color(0xFFE2E8F0),
+                    color = if (result.pitchJitterEstimate > 0.85f && result.isVoicedSpeech) Color(0xFFF87171) else Color(0xFFE2E8F0),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("AI: >0.65 | Human: <0.55", color = Color(0xFF475569), fontSize = 7.sp)
+                Text("AI: >0.85 | Human: 0.5-0.75", color = Color(0xFF475569), fontSize = 7.sp)
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text("HF RATIO (>6.5k)", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = String.format(java.util.Locale.US, "%.4f", result.highFrequencyEnergyRatio),
-                    color = if (result.highFrequencyEnergyRatio < 0.005f) Color(0xFFF87171) else Color(0xFFE2E8F0),
+                    color = if (result.highFrequencyEnergyRatio > 0.15f) Color(0xFFF87171) else Color(0xFFE2E8F0),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("Vocoder Shelf", color = Color(0xFF475569), fontSize = 7.sp)
+                Text("AI Buzz: >0.15", color = Color(0xFF475569), fontSize = 7.sp)
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text("WIENER ENTROPY", color = Color(0xFF64748B), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = String.format(java.util.Locale.US, "%.3f", result.spectralFlatness),
-                    color = if (result.spectralFlatness > 0.45f) Color(0xFFF87171) else Color(0xFFE2E8F0),
+                    color = if (result.spectralFlatness > 0.34f) Color(0xFFF87171) else Color(0xFFE2E8F0),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text("Spectral Flatness", color = Color(0xFF475569), fontSize = 7.sp)
+                Text("AI: >0.34 | Human: <0.26", color = Color(0xFF475569), fontSize = 7.sp)
             }
         }
 

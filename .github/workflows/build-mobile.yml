@@ -46,25 +46,26 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.8-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.2.9-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.2.8-debug.apk
+          path: build-artifacts/XORcall-v1.2.9-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.8-apk
-          name: "XORcall v1.2.8 Android APK (Decoupled Multi-Feature Neural Voice Radar for ChatGPT & Indian Accents)"
+          tag_name: v1.2.9-apk
+          name: "XORcall v1.2.9 Android APK (Clean STT Decoupling, Dedicated AI Voice Radar Mode & Biological Formant Protection)"
           body: |
-            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.8
-            - **Decoupled Multi-Feature Neural Voice Detection**: Removed the mathematical bottleneck where syllable intonation glides (pitch shifts across words) penalized the entire detector down to 0.05. Evaluates Wiener entropy (diffusion floor), autocorrelation wave purity (harmonic lock > 0.60), and high-frequency vocoder phase shelf independently.
-            - **ChatGPT Voice Mode & Indian Accent Recognition**: Reliably identifies multimodal end-to-end neural audio streams (OpenAI GPT-4o, ElevenLabs, StyleTTS) even during rapid conversational cadence and expressive accent intonations.
-            - **Real-Time Forensic Radar**: Displays live Harmonic Purity, High-Frequency Phase Shelf, and Wiener Entropy metrics on the home screen and in floating call banners.
-            - **Permanent Cryptographic Keystore**: Built and pre-signed with permanent debug keystore (v1 + v2 schemes) for direct updates over previous versions.
-          files: build-artifacts/XORcall-v1.2.8-debug.apk
+            ### XORcall Autonomous In-Call Cyber Safety Guardian v1.2.9
+            - **Clean Speech Transcription Reversion & Decoupling**: Completely removed acoustic threat hijacking from raw audio chunk streaming. Vosk offline Kaldi and Groq Whisper Turbo transcribe continuous speech with zero interference, transcript overwrites, or false scam triggers.
+            - **Dedicated AI Voice Radar Mode**: Isolated AI Synthetic Voice detection into an explicit, dedicated operating mode (`isAiVoiceDetectionArmed`). Normal call protection runs cleanly with zero acoustic noise.
+            - **Biological Formant Protection (Zero Human False Positives)**: Recalibrated acoustic forensics: natural human vocal tract formant troughs (Wiener entropy < 0.26) strictly protect natural speech from synthetic flags. AI neural vocoders require sustained elevated entropy (>0.34) and mathematical wave locking (>0.85).
+            - **Dual Testing Console**: Dedicated "🎙️ Test Live Mic (6s Speech Recognition)" and "🤖 Test AI Voice Radar (6s Forensic Scan)" buttons for clear, isolated testing.
+            - **Permanent Cryptographic Keystore**: Built and pre-signed with permanent debug keystore (v1 + v2 schemes) for direct in-place updates.
+          files: build-artifacts/XORcall-v1.2.9-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

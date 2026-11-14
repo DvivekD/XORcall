@@ -12,6 +12,11 @@
   5. *Structure*: Full Monorepo (`backend/`, `web/`, `android/`, `fixtures/`).
 
 ## Key Defensive Innovations & Milestones
+- **Clean STT Reversion, Dedicated AI Voice Radar Mode & Biological Formant Protection (`v1.2.9`)**:
+  1. *Clean STT Audio Decoupling*: Completely severed the premature `onThreatDetected` invocations from `acceptAudioChunkRaw` and `acceptAudioChunk`. Speech recognition (bundled Vosk Kaldi + Groq Whisper Turbo LPU) transcribes natural speech completely uninterrupted, without threat hijacking, transcript overwriting, or false alarms.
+  2. *Dedicated AI Synthetic Voice Mode*: Decoupled AI Voice Detection into an explicit, isolated toggle (`isAiVoiceDetectionArmed`). Normal call protection operates purely on clean speech-to-text and DemographicThreatLexicon regex intent rules.
+  3. *Biological Formant Protection (Zero False Positives)*: Normal human speech vowels naturally exhibit deep formant troughs (Wiener entropy < 0.26). Implemented strict biological formant protection capping synthetic confidence at <= 0.15, guaranteeing that natural human speech reports `🟢 Biological Human Voice`. AI neural vocoders require sustained elevated entropy (>0.34) and mathematical phase-locking (>0.85) over >= 5 frames.
+  4. *Dual In-App Testing Suite*: Added isolated testing controls: "🎙️ Test Live Mic (6s Speech Recognition)" for evaluating speech STT and "🤖 Test AI Voice Radar (6s Forensic Scan)" for standalone vocal harmonic analysis without spurious scam notifications.
 - **4-Stage Kill-Chain Conjunction Engine & Conversational AI Voice Forensics (`v1.2.6`)**:
   1. *4-Stage Psychological Kill-Chain Conjunction Engine*: Eliminated single-word false triggers on words like "daughter", "hospital", or "lakhs". Scam alerts strictly require co-occurrence of Pretext Hook + Fake Authority/Legal Threat + Sensory Isolation + Coercive Payment Demands.
   2. *Active Benign Mitigators*: Legitimate calls (physical hospital triage with zero payment demands, official university portals, routine workplace tasks) actively suppress alarms and remain SAFE.

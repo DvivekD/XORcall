@@ -84,8 +84,8 @@ class AcousticSyntheticDetector {
             val rms = sqrt(sumSquares / samples.size).toFloat()
             if (rms < MIN_SPEECH_RMS) {
                 // Natural conversational pause between words — decay very gently so pauses don't reset detection
-                smoothedSyntheticConfidence *= 0.99f
-                val isSynth = smoothedSyntheticConfidence >= 0.50f && analyzedVoicedFrames >= 2
+                smoothedSyntheticConfidence *= 0.95f
+                val isSynth = smoothedSyntheticConfidence >= 0.72f && analyzedVoicedFrames >= 5 && smoothedFlatness >= 0.32f
                 return AcousticAnalysisResult(
                     isSyntheticVoice = isSynth,
                     syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
@@ -94,7 +94,7 @@ class AcousticSyntheticDetector {
                     spectralFlatness = smoothedFlatness,
                     isVoicedSpeech = false,
                     analysisReason = if (isSynth) {
-                        "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Artificial neural voice identified."
+                        "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Artificial neural vocoder identified."
                     } else {
                         "Awaiting active voice utterance..."
                     }
@@ -216,54 +216,64 @@ class AcousticSyntheticDetector {
             smoothedFlatness = (1 - alpha) * smoothedFlatness + alpha * spectralFlatness
             smoothedMaxCorr = (1 - alpha) * smoothedMaxCorr + alpha * maxCorr
 
-            // 7. Multi-Feature Scientific AI Voice Clone Scoring Model (Decoupled, No Single-Feature Veto)
+            // 7. Multi-Feature Scientific AI Voice Clone Scoring Model
             // Feature 1: Wiener Entropy (Inter-harmonic diffusion noise floor)
+            // Biological vocal tracts produce deep formant troughs between formants: flatness < 0.26
+            // Neural vocoders introduce elevated inter-harmonic diffusion noise: flatness > 0.34
             val flatnessScore = when {
-                smoothedFlatness > 0.35f -> 0.90f // Severe neural diffusion floor
-                smoothedFlatness > 0.27f -> 0.70f // Moderate vocoder signature
-                smoothedFlatness < 0.20f -> 0.05f // Natural human formant troughs
+                smoothedFlatness > 0.40f -> 0.95f // Severe neural diffusion floor
+                smoothedFlatness > 0.34f -> 0.75f // Elevated vocoder inter-harmonic signature
+                smoothedFlatness < 0.26f -> 0.02f // Guaranteed natural biological formant troughs
                 else -> 0.20f
             }
 
             // Feature 2: Harmonic Periodicity Peak (Autocorrelation wave purity during vowels)
+            // Biological human vowels have natural correlation 0.50 - 0.75
+            // Neural vocoders with mathematical phase-locking reach > 0.86
             val periodicityScore = when {
-                smoothedMaxCorr > 0.70f -> 0.90f // High mathematical wave purity
-                smoothedMaxCorr > 0.56f -> 0.70f // Elevated periodicity
-                smoothedMaxCorr < 0.42f -> 0.10f // Low / noisy human airflow
-                else -> 0.25f
+                smoothedMaxCorr > 0.86f -> 0.85f // Unnatural mathematical wave locking
+                smoothedMaxCorr > 0.76f -> 0.45f // Moderately high periodicity
+                smoothedMaxCorr < 0.45f -> 0.05f // Low / noisy turbulent airflow
+                else -> 0.20f
             }
 
             // Feature 3: High-Frequency Vocoder Phase Shelf / Cutoff (>6.5 kHz)
+            // Neural vocoders often show abnormal high-frequency buzz or phase shelving
             val hfScore = when {
-                smoothedHfRatio < 0.007f -> 0.80f // Steep 8kHz/12kHz vocoder filter cutoff
-                smoothedHfRatio > 0.18f -> 0.75f  // Abnormal high-frequency buzz
-                else -> 0.15f
+                smoothedHfRatio > 0.16f -> 0.75f  // Abnormal high-frequency buzz/fizz
+                smoothedHfRatio < 0.003f && smoothedFlatness > 0.32f -> 0.65f // Steep vocoder cutoff combined with diffusion
+                else -> 0.10f
             }
 
             // Feature 4: Pitch Stability during Voiced Frames
-            val pitchStabilityScore = if (isVoiced && lastVoicedLag > 0 && abs(bestLag - lastVoicedLag) <= 1) {
-                0.80f
-            } else if (isVoiced) {
-                0.35f
+            val pitchStabilityScore = if (isVoiced && lastVoicedLag > 0 && abs(bestLag - lastVoicedLag) == 0 && analyzedVoicedFrames >= 6 && smoothedMaxCorr > 0.80f) {
+                0.75f // Mathematical pitch invariance
+            } else if (isVoiced && lastVoicedLag > 0 && abs(bestLag - lastVoicedLag) <= 1) {
+                0.25f // Normal human pitch micro-tremor
             } else {
-                0.15f
+                0.10f
             }
             if (isVoiced) {
                 lastVoicedLag = bestLag
             }
 
             // Weighted multi-feature fusion
-            val instantConfidence = 0.35f * flatnessScore + 0.35f * periodicityScore + 0.15f * hfScore + 0.15f * pitchStabilityScore
+            var instantConfidence = 0.45f * flatnessScore + 0.30f * periodicityScore + 0.15f * hfScore + 0.10f * pitchStabilityScore
+
+            // Biological Formant Veto: If vocal tract shows deep biological formants, synthetic confidence is capped
+            if (smoothedFlatness < 0.26f) {
+                instantConfidence = instantConfidence.coerceAtMost(0.15f)
+            }
+
             smoothedSyntheticConfidence = (1 - alpha) * smoothedSyntheticConfidence + alpha * instantConfidence
 
-            // 8. Decision Trigger
-            val isSynthetic = (smoothedSyntheticConfidence >= 0.50f && analyzedVoicedFrames >= 2) ||
-                    (smoothedSyntheticConfidence >= 0.70f)
+            // 8. Decision Trigger: Requires sustained neural vocoder signatures across >= 5 voiced frames
+            val isSynthetic = (smoothedSyntheticConfidence >= 0.72f && analyzedVoicedFrames >= 5 && smoothedFlatness >= 0.32f)
 
             val reason = when {
-                isSynthetic -> "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Neural vocoder harmonic purity (${String.format(java.util.Locale.US, "%.2f", smoothedMaxCorr)} corr) & elevated Wiener entropy (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)})."
-                smoothedSyntheticConfidence > 0.38f -> "Analyzing voice harmonics: Neural vocoder characteristics observed (${(smoothedSyntheticConfidence * 100).toInt()}%)."
-                isVoiced -> "🟢 Natural Biological Vocal Tract: Deep formant troughs (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness) & natural acoustic turbulence confirmed."
+                isSynthetic -> "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Neural vocoder diffusion (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness) & mathematical wave locking (${String.format(java.util.Locale.US, "%.2f", smoothedMaxCorr)} corr)."
+                smoothedSyntheticConfidence > 0.45f -> "Analyzing voice harmonics: Neural vocoder characteristics observed (${(smoothedSyntheticConfidence * 100).toInt()}%)."
+                isVoiced -> "🟢 Biological Human Voice: Natural vocal tract formant troughs (${String.format(java.util.Locale.US, "%.3f", smoothedFlatness)} flatness) & biological airflow confirmed."
                 else -> "Spoken acoustic stream nominal."
             }
 
