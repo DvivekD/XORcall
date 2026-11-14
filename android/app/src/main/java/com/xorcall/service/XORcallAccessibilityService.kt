@@ -131,23 +131,41 @@ class XORcallAccessibilityService : AccessibilityService() {
         // 2. Real-Time WhatsApp Video Call Detection & Screen HUD Overlay
         val isWhatsApp = pkg.contains("whatsapp", ignoreCase = true)
         val className = event.className?.toString() ?: ""
-        val isVoipCalling = className.contains("voip", ignoreCase = true) ||
-                className.contains("call", ignoreCase = true) ||
-                className.contains("InCall", ignoreCase = true) ||
-                audioManager.mode == AudioManager.MODE_IN_COMMUNICATION
 
-        if (isWhatsApp && isVoipCalling) {
-            startWhatsAppVideoCallInspection()
-        } else if (!isWhatsApp && isVideoCallInspecting) {
-            stopWhatsAppVideoCallInspection()
+        var isWhatsAppCalling = false
+        if (isWhatsApp) {
+            val root = rootInActiveWindow
+            val hasCallControls = try {
+                root?.let { r ->
+                    val endCallNodes = r.findAccessibilityNodeInfosByText("End call")
+                    val muteNodes = r.findAccessibilityNodeInfosByText("Mute")
+                    val videoNodes = r.findAccessibilityNodeInfosByText("Video call")
+                    val callNodes = r.findAccessibilityNodeInfosByText("WhatsApp call")
+                    (endCallNodes.isNotEmpty() || muteNodes.isNotEmpty() || videoNodes.isNotEmpty() || callNodes.isNotEmpty())
+                } ?: false
+            } catch (_: Exception) {
+                false
+            }
+
+            isWhatsAppCalling = hasCallControls ||
+                    className.contains("voip", ignoreCase = true) ||
+                    className.contains("InCall", ignoreCase = true) ||
+                    (audioManager.mode == AudioManager.MODE_IN_COMMUNICATION && className.contains("Call", ignoreCase = true))
         }
 
-        // 3. Detect Dialer / Phone / In-Call UI & Elevate Duplex Audio Intercept
+        if (isWhatsApp && isWhatsAppCalling) {
+            startWhatsAppVideoCallInspection()
+        } else if (!isWhatsApp || !isWhatsAppCalling) {
+            if (isVideoCallInspecting) {
+                stopWhatsAppVideoCallInspection()
+            }
+        }
+
+        // 3. Detect Cellular Dialer / Phone / In-Call UI (Excludes WhatsApp to prevent mic conflicts)
         val isInCallApp = pkg.contains("dialer", ignoreCase = true) ||
                 pkg.contains("incall", ignoreCase = true) ||
                 pkg.contains("telecom", ignoreCase = true) ||
-                pkg.contains("phone", ignoreCase = true) ||
-                isWhatsApp
+                pkg.contains("phone", ignoreCase = true)
 
         if (isInCallApp) {
             try {

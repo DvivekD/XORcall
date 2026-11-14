@@ -171,9 +171,7 @@ class FloatingAlertOverlay(private val context: Context) {
         isPinnedCallHUD: Boolean = true,
         onDismiss: () -> Unit = {}
     ) {
-        if (isSynthetic) {
-            sendHeadsUpNotification(hudBadge)
-        }
+        sendHeadsUpNotification(hudBadge, isSynthetic)
 
         val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
         mainHandler.post {
@@ -361,7 +359,7 @@ class FloatingAlertOverlay(private val context: Context) {
         }
     }
 
-    private fun sendHeadsUpNotification(warningText: String) {
+    private fun sendHeadsUpNotification(warningText: String, isSynthetic: Boolean = true) {
         try {
             val openAppIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -373,30 +371,35 @@ class FloatingAlertOverlay(private val context: Context) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:1930")).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            val dialPendingIntent = PendingIntent.getActivity(
-                context,
-                1,
-                dialIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            val title = if (isSynthetic) "🚨 DEEPFAKE VIDEO CALL DETECTED!" else "🟢 BIOMETRIC VIDEO STREAM VERIFIED"
 
-            val notif = NotificationCompat.Builder(context, ALERT_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setContentTitle("🚨 SCAM CALL DETECTED: HANG UP!")
+            val notifBuilder = NotificationCompat.Builder(context, ALERT_CHANNEL_ID)
+                .setSmallIcon(if (isSynthetic) android.R.drawable.ic_dialog_alert else android.R.drawable.ic_menu_camera)
+                .setContentTitle(title)
                 .setContentText(warningText)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(warningText))
                 .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setCategory(if (isSynthetic) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_CALL)
                 .setContentIntent(openAppPendingIntent)
                 .setAutoCancel(true)
-                .setVibrate(longArrayOf(0, 300, 150, 300, 150, 500))
-                .addAction(android.R.drawable.ic_menu_call, "Dial 1930 Helpline", dialPendingIntent)
-                .build()
 
-            NotificationManagerCompat.from(context).notify(ALERT_NOTIF_ID, notif)
+            if (isSynthetic) {
+                val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:1930")).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                val dialPendingIntent = PendingIntent.getActivity(
+                    context,
+                    1,
+                    dialIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                notifBuilder.setVibrate(longArrayOf(0, 300, 150, 300, 150, 500))
+                notifBuilder.addAction(android.R.drawable.ic_menu_call, "Dial 1930 Helpline", dialPendingIntent)
+            } else {
+                notifBuilder.setVibrate(longArrayOf(0, 80))
+            }
+
+            NotificationManagerCompat.from(context).notify(ALERT_NOTIF_ID, notifBuilder.build())
         } catch (e: Exception) {
             e.printStackTrace()
         }

@@ -200,7 +200,11 @@ object DemographicThreatLexicon {
         // 3. MULTI-STAGE KILL-CHAIN CONJUNCTION RULES:
 
         // Smoking Gun: Any mention of "digital arrest" (a 100% fake construct used only by cyber syndicates)
-        val isExplicitDigitalArrest = lower.contains("digital arrest") || norm.contains("digital arrest")
+        val isExplicitDigitalArrest = lower.contains("digital arrest") ||
+                norm.contains("digital arrest") ||
+                lower.contains("digital artist") ||
+                lower.contains("digit artist") ||
+                lower.contains("digit arrest")
 
         // Rule 1A: Digital Arrest Conjunction (Authority / Legal / Parcel + Isolation + Coercive Payment)
         val isDigitalArrestKillChain = (hasAuthority || hasLegalThreat || hasParcel) && hasIsolation && hasPaymentDemand

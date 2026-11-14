@@ -62,7 +62,10 @@ object PhoneticSpeechNormalizer {
     // Regex for split threat words & telephony distortions
     private val KIDNAP_REGEX = Pattern.compile("\\b(kid\\s+nap|kid\\s+napped|kid\\s+napping|kid\\s+mapping)\\b", Pattern.CASE_INSENSITIVE)
     private val EXTORTION_REGEX = Pattern.compile("\\b(ex\\s+torsion|distortion|egg\\s+stortion|ex\\s+portion|x\\s+torsion)\\b", Pattern.CASE_INSENSITIVE)
-    private val DIGITAL_ARREST_REGEX = Pattern.compile("\\b(digital\\s+a\\s*rest|digital\\s+address|digital\\s+rest|digital\\s+arreste)\\b", Pattern.CASE_INSENSITIVE)
+    private val DIGITAL_ARREST_REGEX = Pattern.compile(
+        "\\b(digital\\s+a\\s*rest|digital\\s+address|digital\\s+rest|digital\\s+arreste|digital\\s+artist|digital\\s+artists|digit\\s+artist|digit\\s+artists|digit\\s+arrest|digit\\s+a\\s*rest|digital\\s+arst)\\b",
+        Pattern.CASE_INSENSITIVE
+    )
     private val POLICE_CUSTODY_REGEX = Pattern.compile("\\b(police\\s+costedy|police\\s+costody|police\\s+custom|police\\s+car\\s+today|police\\s+custardy)\\b", Pattern.CASE_INSENSITIVE)
     private val MONEY_LAUNDERING_REGEX = Pattern.compile("\\b(money\\s+laundry|money\\s+wandering|money\\s+laudering)\\b", Pattern.CASE_INSENSITIVE)
     private val ARREST_WARRANT_REGEX = Pattern.compile("\\b(arrest\\s+warrant|a\\s+rest\\s+warrant|arrest\\s+warrent)\\b", Pattern.CASE_INSENSITIVE)

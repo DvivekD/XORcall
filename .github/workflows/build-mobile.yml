@@ -46,30 +46,35 @@ jobs:
       - name: Copy & Rename APK
         run: |
             mkdir -p build-artifacts
-            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.3-debug.apk
+            cp android/app/build/outputs/apk/debug/app-debug.apk build-artifacts/XORcall-v1.3.4-debug.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: XORcall-Android-APK
-          path: build-artifacts/XORcall-v1.3.3-debug.apk
+          path: build-artifacts/XORcall-v1.3.4-debug.apk
 
       - name: Publish Direct Release APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.3-apk
-          name: "XORcall v1.3.3 Android APK (Physical Sub-Bass Proximity Detector & Stage Remote Trigger)"
+          tag_name: v1.3.4-apk
+          name: "XORcall v1.3.4 Android APK (Acoustic AI Voice Detection & WhatsApp Biometric HUD Fix)"
           body: |
-            ### XORcall Autonomous Cyber Safety Guardian v1.3.3
-            - **Physical Sub-Bass Proximity & Loudspeaker Replay Detector**:
-              - Near-field human mouth proximity generates rich 75-175Hz fundamental chest resonance (>0.20 ratio) -> 100% biological protection.
-              - External loudspeaker playback (ChatGPT Voice Mode from laptop/phone speakers) has an unavoidable physical sub-180Hz driver void (<0.10 ratio) -> Automatically flagged as `AI Synthetic / Loudspeaker Replay Detected (94%)`!
-              - Real-time `SUB-BASS PROX` physical forensic metric displayed live on the Acoustic Radar.
-            - **Stage Presentation Stealth & Remote Control**:
-              - Hardware Volume Down key press secretly toggles demo mode with a discrete 45ms haptic confirmation tick.
-              - Dedicated remote stage webhook endpoints `/api/v1/demo/trigger` and `/api/v1/demo/state` for 1-tap iPhone Shortcut / Back-Tap control.
-            - **WhatsApp Live Video Overlay**:
-              - Dual-spectrum visual inspection directly on top of active WhatsApp video calls (`com.whatsapp`) with verified biometric vs deepfake HUD badges.
-          files: build-artifacts/XORcall-v1.3.3-debug.apk
+            ### XORcall Autonomous Cyber Safety Guardian v1.3.4
+            - **Resolved WhatsApp Audio Recording Hardware Lock**:
+              - Completely eliminated standby `AudioRecord` background capture in `CallMonitorService` that triggered *"WhatsApp cannot record now as XORcall is recording"*.
+              - `AudioRecord` is now strictly released when phone calls are idle and during chat standby.
+            - **Unified Live Mic Detection & Glitch Elimination**:
+              - Replaced dual competing simulations with ONE clean `START LIVE DETECTION (Speech & AI Voice)` mode.
+              - Completely removed rapid 80ms while-loop state mutations that caused UI freezes and haptic loops.
+              - Transcription text keywords (stress points like "inspector", "cbi", "transfer") no longer trigger false AI synthetic voice warnings.
+            - **Enhanced Acoustic AI Voice Detection Algorithm**:
+              - Relaxed air-coupled voicing threshold (`maxCorr >= 0.25f`) and lowered RMS gate (`MIN_SPEECH_RMS = 0.0015f`) to reliably catch quiet ChatGPT voices played through remote laptop speakers.
+              - Added Formant Dynamic Contrast (`formantDepthDb`) to identify vocoder valley diffusion (<14 dB dynamic range) alongside Wiener entropy and sub-180Hz driver void (<0.14 ratio).
+            - **WhatsApp Video Call Biometric HUD**:
+              - Automatically displays verified Biometric vs Deepfake identity HUD overlay and high-priority heads-up banner during active WhatsApp video calls.
+            - **Phonetic Speech Normalizer for Digital Arrest**:
+              - Automatically normalizes "digital artist", "digit artist", and "digit arrest" to "digital arrest" for instantaneous scam extortion mitigation.
+          files: build-artifacts/XORcall-v1.3.4-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

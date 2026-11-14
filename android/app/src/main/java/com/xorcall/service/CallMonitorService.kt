@@ -127,6 +127,8 @@ class CallMonitorService : Service(), TelemetryListener {
                     putExtra("flatness", result.spectralFlatness)
                     putExtra("isVoiced", result.isVoicedSpeech)
                     putExtra("reason", result.analysisReason)
+                    putExtra("subBassRatio", result.subBassProximityRatio)
+                    putExtra("isLoudspeakerReplay", result.isLoudspeakerReplay)
                     setPackage(packageName)
                 }
                 sendBroadcast(acousticIntent)
@@ -177,9 +179,8 @@ class CallMonitorService : Service(), TelemetryListener {
                 e.printStackTrace()
             }
 
-            if (hasMicPermission) {
-                startAudioCapture(isCallOngoing = false)
-            }
+            // Do NOT record in standby — release mic so WhatsApp, Camera, and Phone can record freely
+            stopAudioCaptureInternal()
             startWatchdogLoop()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -429,7 +430,7 @@ class CallMonitorService : Service(), TelemetryListener {
             currentCallerNumber = "Standby (Shield Armed)"
             Log.i(TAG, "Call ended (IDLE): Restoring normal audio routing & clearing threat locks")
             setSpeakerphoneState(false)
-            startAudioCapture(isCallOngoing = false)
+            stopAudioCaptureInternal()
         }
 
         intent?.getStringExtra("EXTRA_VECTOR_SCOPE")?.let { scopeName ->

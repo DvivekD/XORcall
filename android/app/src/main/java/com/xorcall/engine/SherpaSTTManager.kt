@@ -117,51 +117,6 @@ class SherpaSTTManager(
             ctx.sendBroadcast(transcriptIntent)
         }
 
-        // Smart Demo / AI Phrase Trigger: If spoken text matches ChatGPT conversational cues or scam emergencies,
-        // dynamically activate the AI synthetic vocoder signature for live presentation demonstration
-        val lower = displayText.lowercase()
-        val isAiSpokenPhrase = lower.contains("how can i help") ||
-                lower.contains("how can i assist") ||
-                lower.contains("as an ai") ||
-                lower.contains("i am an ai") ||
-                lower.contains("artificial intelligence") ||
-                lower.contains("certainly") ||
-                lower.contains("chatgpt") ||
-                lower.contains("openai") ||
-                lower.contains("arrest warrant") ||
-                lower.contains("digital arrest") ||
-                lower.contains("cbi") ||
-                lower.contains("narcotics") ||
-                lower.contains("bail money") ||
-                lower.contains("accident") ||
-                lower.contains("5 lakh") ||
-                lower.contains("police custody") ||
-                lower.contains("i'm an ai") ||
-                lower.contains("i am a language model") ||
-                lower.contains("inspector") ||
-                lower.contains("cyber cell") ||
-                lower.contains("supreme court") ||
-                lower.contains("transfer") ||
-                lower.contains("rbi") ||
-                lower.contains("customs") ||
-                lower.contains("fedex") ||
-                lower.contains("courier") ||
-                lower.contains("parcel")
-
-        if (isAiSpokenPhrase) {
-            val synthResult = AcousticAnalysisResult(
-                isSyntheticVoice = true,
-                syntheticConfidence = 0.94f,
-                highFrequencyEnergyRatio = 0.0031f,
-                pitchJitterEstimate = 0.89f,
-                spectralFlatness = 0.468f,
-                isVoicedSpeech = true,
-                analysisReason = "🚨 AI SYNTHETIC VOICE DETECTED (94%): Neural vocoder diffusion (0.468 flatness) & mathematical wave locking (0.89 corr)."
-            )
-            latestAcousticResult = synthResult
-            onAcousticResult?.invoke(synthResult)
-        }
-
         // 3. Evaluate threat against active lexicon (using both raw and normalized)
         val analysis = analyzeText(displayText, activeScope)
         if (analysis.isScamDetected) {
