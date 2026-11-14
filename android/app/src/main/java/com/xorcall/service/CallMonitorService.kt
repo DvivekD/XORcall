@@ -395,9 +395,9 @@ class CallMonitorService : Service(), TelemetryListener {
                 )
 
                 val standbySources = listOf(
-                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
                     Pair(MediaRecorder.AudioSource.MIC, "MIC"),
                     Pair(MediaRecorder.AudioSource.VOICE_COMMUNICATION, "VOICE_COMMUNICATION (Duplex)"),
+                    Pair(MediaRecorder.AudioSource.VOICE_RECOGNITION, "VOICE_RECOGNITION"),
                     Pair(MediaRecorder.AudioSource.DEFAULT, "DEFAULT")
                 )
 

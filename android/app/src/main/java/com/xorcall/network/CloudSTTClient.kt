@@ -30,6 +30,7 @@ class CloudSTTClient(
     companion object {
         private const val TAG = "CloudSTTClient"
         private const val GROQ_WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14; XORcall/1.2.7)"
         val DEFAULT_GROQ_KEY: String by lazy {
             try {
                 val mask = 0x5C
@@ -135,13 +136,14 @@ class CloudSTTClient(
                         .addFormDataPart("temperature", "0.0")
                         .addFormDataPart(
                             "prompt",
-                            "extortion, 5 lakhs, digital arrest, police custody, CBI, narcotics, MDMA, FedEx parcel, RBI escrow, kidnapping, transfer money, bail amount, murder, ICU, hospital, court order, UPI, Aadhaar, Crime Branch, FIR, WhatsApp call, emergency ward, lockup"
+                            "Inspector, CBI, Cyber Cell, arrest warrant, digital arrest, transfer 3 lakhs, transfer 5 lakhs, transfer 8 lakhs, RBI account, escrow account, safe custody account, Mumbai Police, stay on video call, do not disconnect, lock the room, FedEx parcel, narcotics, MDMA, bail amount, UPI, RTGS, Crime Branch, FIR, hospital, daughter"
                         )
                         .build()
 
                     val request = Request.Builder()
                         .url(GROQ_WHISPER_URL)
                         .addHeader("Authorization", "Bearer $groqApiKey")
+                        .addHeader("User-Agent", USER_AGENT)
                         .post(requestBody)
                         .build()
 
@@ -173,6 +175,7 @@ class CloudSTTClient(
 
                     val request = Request.Builder()
                         .url("$backendUrl/api/stt/transcribe-pcm")
+                        .addHeader("User-Agent", USER_AGENT)
                         .post(multipart)
                         .build()
 

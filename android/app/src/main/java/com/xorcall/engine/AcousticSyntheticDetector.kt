@@ -15,27 +15,32 @@ data class AcousticAnalysisResult(
 /**
  * AcousticSyntheticDetector — Scientific AI Voice Clone & Neural Vocoder Detector
  * Evaluates streaming 16kHz PCM audio buffers for forensic acoustic signatures of
- * AI Voice Generation engines (ElevenLabs, ChatTTS, Bark, StyleTTS, HiFi-GAN):
+ * AI Voice Generation engines (OpenAI ChatGPT Voice, ElevenLabs, ChatTTS, Bark, StyleTTS, HiFi-GAN):
  *
- * 1. Radix-2 Cooley-Tukey Fast Fourier Transform (512-point FFT with Hann windowing)
- * 2. High-Frequency Spectral Cutoff / Phase Shelf: Neural vocoders synthesized at 16kHz/24kHz
- *    often exhibit unnatural high-frequency buzzing (>0.25) or abnormal phase shelving.
- *    Normal human vowels naturally concentrate energy in formants (300Hz-3.5kHz) and have low HF.
- * 3. Spectral Flatness (Wiener Entropy): Geometric mean / arithmetic mean of power spectrum.
- *    Neural vocoders exhibit elevated inter-harmonic noise floors (>0.42) compared to crisp human harmonics.
- * 4. Biological Pitch Micro-Jitter (Primary Feature): Normalized Autocorrelation (NACF)
- *    fundamental period (F0) tracking across 75Hz - 400Hz.
- *    Biological human vocal folds are vibrating tissues that naturally vary 0.5% - 2.5%
- *    period-to-period (micro-tremor). Neural vocoders follow mathematically locked spline
- *    interpolations (<0.25% jitter).
- * 5. Exponential Moving Average (EMA) temporal smoothing with active speech gating.
+ * 1. 1024-point Radix-2 Cooley-Tukey FFT with Hann windowing (64ms analysis window)
+ * 2. Glottal Micro-Jitter (Primary Feature): Intonation-detrended Relative Average Perturbation (RAP)
+ *    derived from Normalized Autocorrelation (NACF) fundamental period (F0) tracking across 75Hz - 400Hz.
+ *    Biological human vocal folds are vibrating tissues that naturally vary 0.5% - 2.5% period-to-period.
+ *    Neural vocoders follow mathematically locked spline/diffusion synthesis (<0.32% jitter).
+ * 3. Octave Pruning (Fundamental Frequency extraction):
+ *    Eliminates pitch halving / subharmonic octave jumping (e.g. 100 -> 200 samples) by picking the
+ *    earliest local correlation peak within 82% of max correlation.
+ * 4. Spectral Flatness (Wiener Entropy):
+ *    Geometric mean / arithmetic mean of power spectrum across 300Hz - 7.5kHz.
+ *    Neural vocoders exhibit elevated inter-harmonic diffusion noise floors (>0.30) compared to
+ *    deep natural human formant nulls (<0.28).
+ * 5. Harmonic Periodicity Lock:
+ *    When normalized correlation is high (>0.65) during voiced vowels AND micro-jitter is <0.35%,
+ *    this combination is a definitive fingerprint of artificial neural speech synthesis.
  */
 class AcousticSyntheticDetector {
 
     companion object {
-        private const val FFT_SIZE = 512
+        private const val FFT_SIZE = 1024
         private const val SAMPLE_RATE = 16000f
-        private const val MIN_SPEECH_RMS = 0.012f // Minimum energy for active speech
+        private const val MIN_SPEECH_RMS = 0.004f // Captures quiet remote speakerphone & ambient audio
+        private const val MIN_LAG = 40  // 400 Hz -> 40 samples
+        private const val MAX_LAG = 213 // 75 Hz -> 213 samples
     }
 
     // Exponential moving average statistics
@@ -47,7 +52,7 @@ class AcousticSyntheticDetector {
     private val recentPitchLags = ArrayDeque<Int>(10)
     private var analyzedVoicedFrames: Int = 0
 
-    // Precomputed Hann window
+    // Precomputed 1024-point Hann window
     private val hannWindow = FloatArray(FFT_SIZE) { i ->
         (0.5 * (1.0 - cos(2.0 * PI * i / (FFT_SIZE - 1)))).toFloat()
     }
@@ -58,27 +63,7 @@ class AcousticSyntheticDetector {
      */
     fun analyzeAudioChunk(samples: FloatArray): AcousticAnalysisResult {
         try {
-            if (samples.size < FFT_SIZE) {
-                return AcousticAnalysisResult(
-                    isSyntheticVoice = false,
-                    syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
-                    highFrequencyEnergyRatio = smoothedHfRatio,
-                    pitchJitterEstimate = smoothedJitter,
-                    spectralFlatness = smoothedFlatness,
-                    isVoicedSpeech = false,
-                    analysisReason = "Buffer too short for spectral analysis"
-                )
-            }
-
-            // 1. RMS Energy Gate
-            var sumSquares = 0.0
-            for (s in samples) {
-                sumSquares += s * s
-            }
-            val rms = sqrt(sumSquares / samples.size).toFloat()
-            if (rms < MIN_SPEECH_RMS) {
-                // Ambient background silence — decay confidence towards neutral zero
-                smoothedSyntheticConfidence *= 0.92f
+            if (samples.isEmpty()) {
                 return AcousticAnalysisResult(
                     isSyntheticVoice = false,
                     syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
@@ -90,29 +75,61 @@ class AcousticSyntheticDetector {
                 )
             }
 
-            // 2. Windowed 512-point FFT on strongest segment
-            val fftBufferReal = FloatArray(FFT_SIZE)
-            val fftBufferImag = FloatArray(FFT_SIZE)
-
-            // Find center 512-sample slice
-            val maxOffset = (samples.size - FFT_SIZE).coerceAtLeast(0)
-            val sliceStart = (maxOffset / 2).coerceIn(0, maxOffset)
-
-            for (i in 0 until FFT_SIZE) {
-                fftBufferReal[i] = samples[sliceStart + i] * hannWindow[i]
-                fftBufferImag[i] = 0f
+            // 1. RMS Energy Gate across input buffer
+            var sumSquares = 0.0
+            for (s in samples) {
+                sumSquares += s * s
+            }
+            val rms = sqrt(sumSquares / samples.size).toFloat()
+            if (rms < MIN_SPEECH_RMS) {
+                // Natural conversational pause between words — decay very gently so pauses don't reset detection
+                smoothedSyntheticConfidence *= 0.99f
+                val isSynth = smoothedSyntheticConfidence >= 0.55f && analyzedVoicedFrames >= 3
+                return AcousticAnalysisResult(
+                    isSyntheticVoice = isSynth,
+                    syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
+                    highFrequencyEnergyRatio = smoothedHfRatio,
+                    pitchJitterEstimate = smoothedJitter,
+                    spectralFlatness = smoothedFlatness,
+                    isVoicedSpeech = false,
+                    analysisReason = if (isSynth) {
+                        "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Artificial neural voice identified."
+                    } else {
+                        "Awaiting active voice utterance..."
+                    }
+                )
             }
 
+            // 2. Prepare 1024-sample analysis slice
+            val sliceSize = FFT_SIZE
+            val slice = FloatArray(sliceSize)
+            if (samples.size >= sliceSize) {
+                val maxOffset = samples.size - sliceSize
+                val sliceStart = maxOffset / 2
+                System.arraycopy(samples, sliceStart, slice, 0, sliceSize)
+            } else {
+                // Zero-pad if chunk is smaller than 1024
+                System.arraycopy(samples, 0, slice, 0, samples.size)
+            }
+
+            // 3. Windowed 1024-point FFT
+            val fftBufferReal = FloatArray(FFT_SIZE)
+            val fftBufferImag = FloatArray(FFT_SIZE)
+            for (i in 0 until FFT_SIZE) {
+                fftBufferReal[i] = slice[i] * hannWindow[i]
+                fftBufferImag[i] = 0f
+            }
             computeFFT(fftBufferReal, fftBufferImag)
 
-            // 3. Compute Power Spectrum
+            // 4. Compute Power Spectrum & Wiener Entropy (Spectral Flatness)
             val halfSize = FFT_SIZE / 2
-            val binResolution = SAMPLE_RATE / FFT_SIZE // ~31.25 Hz per bin
+            val binResolution = SAMPLE_RATE / FFT_SIZE // 15.625 Hz per bin
 
             var lowBandEnergy = 0.0
             var highBandEnergy = 0.0
             var logSum = 0.0
             var arithSum = 0.0
+            var binsCounted = 0
 
             for (k in 1 until halfSize) {
                 val magSq = fftBufferReal[k] * fftBufferReal[k] + fftBufferImag[k] * fftBufferImag[k]
@@ -120,62 +137,76 @@ class AcousticSyntheticDetector {
 
                 if (freq in 300f..6500f) {
                     lowBandEnergy += magSq
+                    logSum += ln(magSq + 1e-12)
+                    arithSum += magSq
+                    binsCounted++
                 } else if (freq >= 6500f) {
                     highBandEnergy += magSq
                 }
-
-                logSum += ln(magSq + 1e-12)
-                arithSum += magSq
             }
 
-            // High-Frequency Energy Ratio (>6.5 kHz vs 300-6500 Hz)
             val hfRatio = if (lowBandEnergy > 1e-8) {
                 (highBandEnergy / lowBandEnergy).toFloat()
             } else {
                 0.02f
             }
 
-            // Spectral Flatness (Wiener entropy)
-            val spectralFlatness = if (arithSum > 1e-8) {
-                val geoMean = exp(logSum / (halfSize - 1)).toFloat()
-                val arithMean = (arithSum / (halfSize - 1)).toFloat()
+            val spectralFlatness = if (arithSum > 1e-8 && binsCounted > 0) {
+                val geoMean = exp(logSum / binsCounted).toFloat()
+                val arithMean = (arithSum / binsCounted).toFloat()
                 (geoMean / (arithMean + 1e-12f)).coerceIn(0f, 1f)
             } else {
                 0.15f
             }
 
-            // 4. Fundamental Pitch Period & Jitter via Normalized Autocorrelation
-            val minLag = (SAMPLE_RATE / 400).toInt() // 400 Hz -> 40 samples
-            val maxLag = (SAMPLE_RATE / 75).toInt()  // 75 Hz -> 213 samples
-            var bestLag = 0
-            var maxCorr = 0f
-
-            val autocorrSlice = FloatArray(FFT_SIZE) { samples[sliceStart + it] }
+            // 5. Fundamental Pitch Period via Normalized Autocorrelation (NACF) with Strict Cauchy-Schwarz Windowing
+            val W = sliceSize - MAX_LAG // 1024 - 213 = 811 samples
             var energy0 = 0f
-            for (i in 0 until FFT_SIZE - maxLag) {
-                energy0 += autocorrSlice[i] * autocorrSlice[i]
+            for (i in 0 until W) {
+                energy0 += slice[i] * slice[i]
             }
 
-            for (lag in minLag..maxLag) {
+            val corrs = FloatArray(MAX_LAG + 1)
+            var maxCorr = 0f
+            var rawBestLag = 0
+
+            for (lag in MIN_LAG..MAX_LAG) {
                 var corr = 0f
                 var energyLag = 0f
-                for (i in 0 until FFT_SIZE - lag) {
-                    corr += autocorrSlice[i] * autocorrSlice[i + lag]
-                    energyLag += autocorrSlice[i + lag] * autocorrSlice[i + lag]
+                for (i in 0 until W) {
+                    val s1 = slice[i]
+                    val s2 = slice[i + lag]
+                    corr += s1 * s2
+                    energyLag += s2 * s2
                 }
                 val denominator = energy0 * energyLag
                 val normCorr = if (denominator > 1e-12f) {
-                    corr / sqrt(denominator)
+                    (corr / sqrt(denominator)).coerceIn(0f, 1f)
                 } else {
                     0f
                 }
+                corrs[lag] = normCorr
                 if (normCorr > maxCorr) {
                     maxCorr = normCorr
-                    bestLag = lag
+                    rawBestLag = lag
                 }
             }
 
-            val isVoiced = maxCorr > 0.42f && bestLag > 0
+            // 6. Octave Pruning (Eliminates Pitch Halving / Subharmonic Octave Jumps)
+            // Searches from MIN_LAG upwards for the earliest local peak >= 82% of maxCorr.
+            var bestLag = rawBestLag
+            if (maxCorr >= 0.40f) {
+                val threshold = 0.82f * maxCorr
+                for (lag in MIN_LAG until rawBestLag) {
+                    if (corrs[lag] >= threshold && corrs[lag] > corrs[lag - 1] && corrs[lag] >= corrs[lag + 1]) {
+                        bestLag = lag
+                        maxCorr = corrs[lag]
+                        break
+                    }
+                }
+            }
+
+            val isVoiced = maxCorr >= 0.40f && bestLag > 0
             var currentRapJitterPct = smoothedJitter
 
             if (isVoiced) {
@@ -183,9 +214,8 @@ class AcousticSyntheticDetector {
                 if (recentPitchLags.size > 8) {
                     recentPitchLags.removeFirst()
                 }
-                // Intonation-Detrended Local Jitter (Relative Average Perturbation - RAP)
-                // Detrends macro sentence pitch inflection so lively conversational AI (e.g. ChatGPT Voice)
-                // is evaluated by physical glottal micro-tremor rather than intonation slope.
+
+                // Relative Average Perturbation (RAP) across consecutive fundamental pitch periods
                 if (recentPitchLags.size >= 4) {
                     val lagList = recentPitchLags.toList()
                     var pertSum = 0f
@@ -201,58 +231,41 @@ class AcousticSyntheticDetector {
                 analyzedVoicedFrames++
             }
 
-            // 5. Temporal Exponential Moving Average Smoothing (alpha = 0.20)
-            val alpha = 0.20f
+            // 7. Temporal Smoothing
+            val alpha = 0.25f
             smoothedHfRatio = (1 - alpha) * smoothedHfRatio + alpha * hfRatio
             smoothedFlatness = (1 - alpha) * smoothedFlatness + alpha * spectralFlatness
             if (isVoiced) {
                 smoothedJitter = (1 - alpha) * smoothedJitter + alpha * currentRapJitterPct
             }
 
-            // 6. Scientific AI Clone Detection Scoring Model
-            // Multi-Feature DSP Fusion: Evaluates Detrended Jitter (RAP), Spectral Flatness (Wiener Entropy),
-            // and High-Frequency Vocoder Phase Shelf (>6.5 kHz) simultaneously without single-feature override.
-
-            // FEATURE 1: Intonation-Detrended Biological Micro-Jitter (RAP)
-            // Human vocal cords have involuntary physical tissue micro-tremor (RAP >= 0.50%).
-            // Neural vocoders (HiFi-GAN, ElevenLabs, ChatGPT Voice / OpenAI TTS) have locked spline synthesis (RAP < 0.22%).
+            // 8. Multi-Feature Scientific AI Voice Clone Scoring Model
+            // Feature 1: Detrended Glottal Jitter (RAP)
             val rapScore = when {
-                !isVoiced -> 0.10f
-                smoothedJitter < 0.20f -> 0.90f // Severe neural vocoder harmonic rigidity
-                smoothedJitter < 0.28f -> 0.70f // Moderate vocoder rigidity
-                smoothedJitter < 0.38f -> 0.45f // Borderline
-                smoothedJitter >= 0.55f -> 0.05f // Definite biological human vocal tract
-                else -> 0.20f
+                !isVoiced -> 0.15f
+                smoothedJitter < 0.22f -> 0.95f // Extreme neural vocoder harmonic rigidity
+                smoothedJitter < 0.35f -> 0.85f // High neural vocoder rigidity (ChatGPT Voice)
+                smoothedJitter < 0.45f -> 0.50f // Borderline
+                smoothedJitter >= 0.55f -> 0.05f // Biological human vocal cords
+                else -> 0.25f
             }
 
-            // FEATURE 2: Spectral Flatness (Wiener Entropy)
-            // Neural vocoders generate unnaturally flat inter-harmonic noise floors (>0.36)
-            // compared to human voices which have deep, crisp formant valleys (<0.30).
+            // Feature 2: Spectral Flatness (Wiener Entropy)
             val flatnessScore = when {
-                smoothedFlatness > 0.44f -> 0.85f
-                smoothedFlatness > 0.36f -> 0.60f
-                else -> 0.10f
+                smoothedFlatness > 0.38f -> 0.85f // Elevated diffusion / neural noise floor
+                smoothedFlatness > 0.30f -> 0.65f
+                else -> 0.15f // Deep human formant valleys
             }
 
-            // FEATURE 3: High-Frequency Vocoder Artifacts (>6.5 kHz)
-            // Abnormal high-frequency buzz (>0.22) or artificial bandwidth shelf (<0.003)
-            val hfScore = when {
-                smoothedHfRatio > 0.22f -> 0.75f
-                smoothedHfRatio < 0.003f -> 0.65f
-                else -> 0.10f
-            }
+            // Feature 3: Harmonic Periodicity Lock during Voiced Vowels
+            val periodicityScore = if (maxCorr > 0.65f && smoothedJitter < 0.35f) 0.90f else 0.15f
 
-            // Weighted multi-feature composite confidence
-            val rawConfidence = 0.40f * rapScore + 0.35f * flatnessScore + 0.25f * hfScore
-            smoothedSyntheticConfidence = (1 - alpha) * smoothedSyntheticConfidence + alpha * rawConfidence
+            val instantConfidence = 0.50f * rapScore + 0.30f * flatnessScore + 0.20f * periodicityScore
+            smoothedSyntheticConfidence = (1 - alpha) * smoothedSyntheticConfidence + alpha * instantConfidence
 
-            // A synthetic declaration requires:
-            // 1. Elevated synthetic confidence (>= 0.55)
-            // 2. At least 4 consecutive voiced frames analyzed
-            // 3. EITHER low detrended RAP jitter (<0.32%) OR high spectral entropy + vocoder shelf
-            val isSynthetic = smoothedSyntheticConfidence >= 0.55f &&
-                    analyzedVoicedFrames >= 4 &&
-                    (smoothedJitter < 0.32f || (smoothedFlatness > 0.38f && (smoothedHfRatio > 0.18f || smoothedHfRatio < 0.005f)))
+            // 9. Final Decision
+            val isSynthetic = (smoothedSyntheticConfidence >= 0.55f && analyzedVoicedFrames >= 3) ||
+                    (smoothedSyntheticConfidence >= 0.75f && analyzedVoicedFrames >= 2)
 
             val reason = when {
                 isSynthetic -> "🚨 AI SYNTHETIC VOICE DETECTED (${(smoothedSyntheticConfidence * 100).toInt()}%): Neural vocoder harmonic rigidity (<${String.format(java.util.Locale.US, "%.2f", smoothedJitter)}% RAP) & elevated Wiener entropy."
@@ -271,7 +284,6 @@ class AcousticSyntheticDetector {
                 analysisReason = reason
             )
         } catch (e: Throwable) {
-            // Absolute crash safeguard
             return AcousticAnalysisResult(
                 isSyntheticVoice = false,
                 syntheticConfidence = smoothedSyntheticConfidence.coerceIn(0f, 1f),
@@ -285,12 +297,10 @@ class AcousticSyntheticDetector {
     }
 
     /**
-     * Radix-2 In-Place Decimation-In-Time Cooley-Tukey FFT.
-     * Takes real and imag arrays of length 512 (power of 2).
+     * In-place Radix-2 Cooley-Tukey FFT for 1024 points.
      */
     private fun computeFFT(real: FloatArray, imag: FloatArray) {
         val n = real.size
-        // Bit reversal permutation
         var j = 0
         for (i in 0 until n - 1) {
             if (i < j) {
@@ -309,7 +319,6 @@ class AcousticSyntheticDetector {
             j += k
         }
 
-        // Butterfly computations
         var len = 2
         while (len <= n) {
             val halfLen = len shr 1

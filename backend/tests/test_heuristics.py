@@ -187,3 +187,13 @@ def test_benign_casual_daughter_hospital_lakhs_safe():
 
     r2 = session.feed("We bought a car for 5 lakhs with our normal bank savings.")
     assert r2["level"] == "SAFE"
+
+def test_user_exact_digital_arrest_phrase_is_critical():
+    session = CallHeuristicSession("test_user_phrase_01")
+    r = session.feed("Inspector from CBI Cyber Cell... arrest warrant... transfer 3 lakhs to RBI account")
+    assert "authority_claim" in r["flags"]
+    assert "legal_threat" in r["flags"]
+    assert "payment_demand" in r["flags"]
+    assert r["level"] == "CRITICAL"
+    assert r["risk_score"] >= 0.90
+    assert r["threat_type"] == "DIGITAL_ARREST_SCAM"

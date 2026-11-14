@@ -165,7 +165,7 @@ class SherpaSTTManager(
         val rms = sqrt(sumSquares / count) / 32768.0
 
         val now = System.currentTimeMillis()
-        if (rms > 0.012) {
+        if (rms > 0.004) {
             voicedChunksInCurrentBuffer++
             lastSpeechTimestamp = now
         }
@@ -175,11 +175,11 @@ class SherpaSTTManager(
             val currentBytes = cloudAudioBuffer.size()
 
             // Sentence-Aligned Adaptive VAD for Groq Whisper Turbo LPU:
-            // Dispatches on natural 250ms speech cadence pauses when buffer has >= 1.2s of speech,
-            // or when buffer accumulates full conversational sentence (~2.2s / 70,000 bytes).
-            val hasEnoughSpeech = voicedChunksInCurrentBuffer >= 3
-            val isBufferFull = currentBytes >= 70000
-            val isSpeechPaused = (now - lastSpeechTimestamp > 250) && currentBytes >= 38000
+            // Dispatches on natural 280ms speech cadence pauses when buffer has >= 0.75s of speech (24,000 bytes),
+            // or when buffer accumulates a complete phrase (~1.5s / 48,000 bytes).
+            val hasEnoughSpeech = voicedChunksInCurrentBuffer >= 2
+            val isBufferFull = currentBytes >= 48000
+            val isSpeechPaused = (now - lastSpeechTimestamp > 280) && currentBytes >= 24000
 
             if (hasEnoughSpeech && (isBufferFull || isSpeechPaused)) {
                 val pcmToDispatch = cloudAudioBuffer.toByteArray()
@@ -192,9 +192,16 @@ class SherpaSTTManager(
                     }
                 }
             } else if (currentBytes > 128000) {
-                // Safeguard against unbound buffer growth during continuous loud noise
+                // Safeguard against unbound buffer growth: dispatch accumulated audio rather than discarding
+                val pcmToDispatch = cloudAudioBuffer.toByteArray()
                 cloudAudioBuffer.reset()
                 voicedChunksInCurrentBuffer = 0
+
+                cloudSttClient.transcribePcmAsync(cloudScope, pcmToDispatch) { transcript, source ->
+                    if (transcript.isNotBlank()) {
+                        handleIncomingTranscript(transcript, true)
+                    }
+                }
             }
         }
     }

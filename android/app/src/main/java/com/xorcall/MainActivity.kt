@@ -291,10 +291,10 @@ fun MainScreen(
             val minBuf = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096)
             var recorder: AudioRecord? = null
             try {
-                // Try VOICE_RECOGNITION first, fallback to standard MIC
+                // Try standard MIC first to avoid triggering system Google/Gemini Assistant popups
                 val sources = intArrayOf(
-                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                    MediaRecorder.AudioSource.MIC
+                    MediaRecorder.AudioSource.MIC,
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION
                 )
                 for (src in sources) {
                     try {
