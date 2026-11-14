@@ -17,10 +17,13 @@ class PackageWatchdog(private val context: Context) {
 
     companion object {
         @Volatile
-        var isScamCallActive: Boolean = false
+        private var _isScamCallActive: Boolean = false
+
+        val isScamCallActive: Boolean
+            get() = _isScamCallActive
 
         fun setScamCallActive(active: Boolean) {
-            isScamCallActive = active
+            _isScamCallActive = active
         }
 
         // Targeted set of financial, payment, banking, crypto, and coercion messaging packages

@@ -32,11 +32,13 @@ class XORcallAccessibilityService : AccessibilityService() {
             private set
 
         @Volatile
-        var isScamCallActive = false
-            private set
+        private var _isScamCallActive = false
+
+        val isScamCallActive: Boolean
+            get() = _isScamCallActive
 
         fun setScamCallActive(active: Boolean) {
-            isScamCallActive = active
+            _isScamCallActive = active
             Log.i("XORcallA11yService", "isScamCallActive updated to: $active")
         }
     }
