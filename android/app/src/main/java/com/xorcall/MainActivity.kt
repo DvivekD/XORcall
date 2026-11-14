@@ -229,6 +229,7 @@ fun MainScreen(
     var liveAudioRms by remember { mutableStateOf(0f) }
     var liveAudioSource by remember { mutableStateOf("Standby") }
     var voskErrorMessage by remember { mutableStateOf(sttManager.errorMessage) }
+    var lastThreatAlertTime by remember { mutableStateOf(0L) }
 
     // VIDEO CALL DEEPFAKE INSPECTION ENGINE & HUD STATE
     val videoDetector = remember { VideoDeepfakeDetector() }
@@ -400,8 +401,6 @@ fun MainScreen(
             Toast.makeText(context, "🟢 Normal speech: No threat markers found.", Toast.LENGTH_SHORT).show()
         }
     }
-
-    var lastThreatAlertTime by remember { mutableStateOf(0L) }
 
     fun startDirectMicTest() {
         if (isMicTesting) {
